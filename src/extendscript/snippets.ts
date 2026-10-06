@@ -1323,6 +1323,108 @@ export function scriptDeleteLayer(params: {
   })()`;
 }
 
+export function scriptPrecomposeLayers(params: {
+  compName?: string;
+  layerIndices?: number[];
+  layerNames?: string[];
+  precompName: string;
+}): string {
+  return `(function() {
+    ${ExtendScriptHelpers}
+    var comp = __findComp(${JSON.stringify(params.compName)});
+    var indices = [];
+
+    if (${JSON.stringify(params.layerIndices || null)} !== null) {
+      indices = ${JSON.stringify(params.layerIndices || [])};
+    } else if (${JSON.stringify(params.layerNames || null)} !== null) {
+      var names = ${JSON.stringify(params.layerNames || [])};
+      for (var n = 0; n < names.length; n++) {
+        var l = __findLayer(comp, names[n]);
+        indices.push(l.index);
+      }
+    } else {
+      // Use selected layers
+      if (comp.selectedLayers.length === 0) {
+        throw new Error("No layers selected to precompose.");
+      }
+      for (var s = 0; s < comp.selectedLayers.length; s++) {
+        indices.push(comp.selectedLayers[s].index);
+      }
+    }
+
+    if (indices.length === 0) {
+      throw new Error("No layers specified to precompose.");
+    }
+
+    var precompName = ${JSON.stringify(params.precompName || 'Pre-comp 1')};
+    // comp.layers.precompose(layerIndices, name, moveAllAttributes)
+    var precomp = comp.layers.precompose(indices, precompName, true);
+
+    return {
+      success: true,
+      precompName: precomp.name,
+      precompLayersCount: precomp.numLayers,
+      parentCompName: comp.name
+    };
+  })()`;
+}
+
+export function scriptReorderLayer(params: {
+  compName?: string;
+  layerName?: string;
+  layerIndex?: number;
+  operation: 'moveBefore' | 'moveAfter' | 'moveToBeginning' | 'moveToEnd' | 'setIndex';
+  targetLayerName?: string;
+  targetLayerIndex?: number;
+  newIndex?: number;
+}): string {
+  const layerRef = params.layerIndex !== undefined ? params.layerIndex : (params.layerName || 1);
+  return `(function() {
+    ${ExtendScriptHelpers}
+    var comp = __findComp(${JSON.stringify(params.compName)});
+    var layer = __findLayer(comp, ${JSON.stringify(layerRef)});
+    var op = ${JSON.stringify(params.operation)};
+    var oldIndex = layer.index;
+
+    if (op === 'moveToBeginning') {
+      layer.moveToBeginning();
+    } else if (op === 'moveToEnd') {
+      layer.moveToEnd();
+    } else if (op === 'moveBefore') {
+      var targetRef = ${JSON.stringify(params.targetLayerIndex !== undefined ? params.targetLayerIndex : (params.targetLayerName || null))};
+      if (targetRef === null) throw new Error("targetLayerName or targetLayerIndex is required for moveBefore.");
+      var targetLay = __findLayer(comp, targetRef);
+      layer.moveBefore(targetLay);
+    } else if (op === 'moveAfter') {
+      var targetRef = ${JSON.stringify(params.targetLayerIndex !== undefined ? params.targetLayerIndex : (params.targetLayerName || null))};
+      if (targetRef === null) throw new Error("targetLayerName or targetLayerIndex is required for moveAfter.");
+      var targetLay = __findLayer(comp, targetRef);
+      layer.moveAfter(targetLay);
+    } else if (op === 'setIndex') {
+      var targetIdx = ${params.newIndex !== undefined ? params.newIndex : 'null'};
+      if (targetIdx === null) throw new Error("newIndex is required for setIndex operation.");
+      if (targetIdx < 1) targetIdx = 1;
+      if (targetIdx > comp.numLayers) targetIdx = comp.numLayers;
+      var targetLay = comp.layer(targetIdx);
+      if (targetIdx < oldIndex) {
+        layer.moveBefore(targetLay);
+      } else if (targetIdx > oldIndex) {
+        layer.moveAfter(targetLay);
+      }
+    } else {
+      throw new Error("Unknown operation: " + op);
+    }
+
+    return {
+      success: true,
+      layerName: layer.name,
+      oldIndex: oldIndex,
+      newIndex: layer.index,
+      operation: op
+    };
+  })()`;
+}
+
 export function scriptSetLayerMask(params: {
   compName?: string;
   layerName?: string;
@@ -2796,6 +2898,53 @@ export function scriptExportPreviewVideo(params: {
   })()`;
 }
 
+export function scriptExportWithAME(params: {
+  compName?: string;
+  outputPath?: string;
+  presetPath?: string;
+  renderImmediately?: boolean;
+}): string {
+  return `(function() {
+    ${ExtendScriptHelpers}
+    var comp = __findComp(${JSON.stringify(params.compName)});
+
+    // Add to AE render queue first
+    var rqItem = app.project.renderQueue.items.add(comp);
+    
+    if (${JSON.stringify(params.outputPath || null)} !== null) {
+      var outFile = new File(${JSON.stringify(params.outputPath ? params.outputPath.replace(/\\/g, '/') : '')});
+      if (!outFile.parent.exists) outFile.parent.create();
+      try {
+        rqItem.outputModule(1).file = outFile;
+      } catch(e){}
+    }
+
+    var ameAvailable = false;
+    var queueResult = "queued_in_render_queue";
+
+    // Queue in AME method
+    if (app.project.renderQueue.queueInAME) {
+      try {
+        var renderImmediately = ${Boolean(params.renderImmediately)};
+        app.project.renderQueue.queueInAME(renderImmediately);
+        ameAvailable = true;
+        queueResult = "queued_in_adobe_media_encoder";
+      } catch(ameErr) {
+        queueResult = "queueInAME_failed: " + ameErr.toString();
+      }
+    }
+
+    return {
+      success: true,
+      compName: comp.name,
+      ameAvailable: ameAvailable,
+      status: queueResult,
+      renderImmediately: Boolean(${params.renderImmediately}),
+      outputPath: ${JSON.stringify(params.outputPath || null)}
+    };
+  })()`;
+}
+
 export function scriptSetEffectPropertyKeyframe(params: {
   compName?: string;
   layerName?: string;
@@ -3147,16 +3296,16 @@ export function scriptAddTextAnimator(params: {
 
     if (preset === 'typewriter') {
       animProps.addProperty("ADBE Text Opacity").setValue(0);
-      var sel = selectors.addProperty("ADBE Text Range Selector");
-      var startProp = sel.property("ADBE Text Range Start");
+      var sel = selectors.addProperty("ADBE Text Selector");
+      var startProp = sel.property("ADBE Text Percent Start");
       startProp.setValueAtTime(sTime, 0);
       startProp.setValueAtTime(eTime, 100);
     } else if (preset === 'fade_up_chars') {
       animProps.addProperty("ADBE Text Opacity").setValue(0);
       var posProp = animProps.addProperty("ADBE Text Position");
       posProp.setValue([0, 40]);
-      var sel = selectors.addProperty("ADBE Text Range Selector");
-      var startProp = sel.property("ADBE Text Range Start");
+      var sel = selectors.addProperty("ADBE Text Selector");
+      var startProp = sel.property("ADBE Text Percent Start");
       startProp.setValueAtTime(sTime, 0);
       startProp.setValueAtTime(eTime, 100);
       try {
@@ -3171,15 +3320,17 @@ export function scriptAddTextAnimator(params: {
       animProps.addProperty("ADBE Text Opacity").setValue(0);
       var posProp = animProps.addProperty("ADBE Text Position");
       posProp.setValue([0, 100]);
-      var sel = selectors.addProperty("ADBE Text Range Selector");
-      var startProp = sel.property("ADBE Text Range Start");
+      var sel = selectors.addProperty("ADBE Text Selector");
+      var startProp = sel.property("ADBE Text Percent Start");
       startProp.setValueAtTime(sTime, 0);
       startProp.setValueAtTime(eTime, 100);
     } else if (preset === 'scale_pop_chars') {
-      var scProp = animProps.addProperty("ADBE Text Scale");
-      scProp.setValue([0, 0]);
-      var sel = selectors.addProperty("ADBE Text Range Selector");
-      var startProp = sel.property("ADBE Text Range Start");
+      var scProp = null;
+      if (animProps.canAddProperty("ADBE Text Scale 3D")) scProp = animProps.addProperty("ADBE Text Scale 3D");
+      else if (animProps.canAddProperty("ADBE Text Scale")) scProp = animProps.addProperty("ADBE Text Scale");
+      if (scProp) scProp.setValue([0, 0, 0]);
+      var sel = selectors.addProperty("ADBE Text Selector");
+      var startProp = sel.property("ADBE Text Percent Start");
       startProp.setValueAtTime(sTime, 0);
       startProp.setValueAtTime(eTime, 100);
     } else if (preset === '3d_flip_chars') {
@@ -3189,8 +3340,8 @@ export function scriptAddTextAnimator(params: {
       animProps.addProperty("ADBE Text Opacity").setValue(0);
       var rotY = animProps.addProperty("ADBE Text Rotation Y");
       rotY.setValue(-90);
-      var sel = selectors.addProperty("ADBE Text Range Selector");
-      var startProp = sel.property("ADBE Text Range Start");
+      var sel = selectors.addProperty("ADBE Text Selector");
+      var startProp = sel.property("ADBE Text Percent Start");
       startProp.setValueAtTime(sTime, 0);
       startProp.setValueAtTime(eTime, 100);
     } else if (preset === 'tracking_expand') {
@@ -3208,8 +3359,8 @@ export function scriptAddTextAnimator(params: {
     } else if (preset === 'glitch_decoder') {
       var cr = animProps.addProperty("ADBE Text Character Range");
       cr.setValue(15);
-      var sel = selectors.addProperty("ADBE Text Range Selector");
-      var startProp = sel.property("ADBE Text Range Start");
+      var sel = selectors.addProperty("ADBE Text Selector");
+      var startProp = sel.property("ADBE Text Percent Start");
       startProp.setValueAtTime(sTime, 0);
       startProp.setValueAtTime(eTime, 100);
     }

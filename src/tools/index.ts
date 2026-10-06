@@ -520,6 +520,43 @@ Use getInstalledPlugins to discover installed effects or test compatibility.`,
     }
   );
 
+  // --- precomposeLayers ---
+  server.tool(
+    'precomposeLayers',
+    'Precompose selected layers into a new nested sub-composition (precomp) with custom name',
+    {
+      compName: z.string().optional().describe('Parent composition name (defaults to active comp)'),
+      precompName: z.string().describe('Name for the new sub-composition / precomp'),
+      layerIndices: z.array(z.number()).optional().describe('List of 1-based layer indices to precompose'),
+      layerNames: z.array(z.string()).optional().describe('List of layer names to precompose'),
+    },
+    async (params) => {
+      const script = snippets.scriptPrecomposeLayers(params);
+      const res = await bridge.execute('precomposeLayers', script, `Precompose layers into '${params.precompName}'`, params);
+      return formatResponse(res);
+    }
+  );
+
+  // --- reorderLayer ---
+  server.tool(
+    'reorderLayer',
+    'Reorder a layer vertically in the layer stack (moveBefore, moveAfter, moveToBeginning, moveToEnd, setIndex)',
+    {
+      compName: z.string().optional().describe('Composition name'),
+      layerName: z.string().optional().describe('Layer name to reorder'),
+      layerIndex: z.number().optional().describe('Layer index to reorder'),
+      operation: z.enum(['moveBefore', 'moveAfter', 'moveToBeginning', 'moveToEnd', 'setIndex']).describe('Reorder operation'),
+      targetLayerName: z.string().optional().describe('Target reference layer name for moveBefore/moveAfter'),
+      targetLayerIndex: z.number().optional().describe('Target reference layer index for moveBefore/moveAfter'),
+      newIndex: z.number().optional().describe('Specific new 1-based layer index for setIndex operation'),
+    },
+    async (params) => {
+      const script = snippets.scriptReorderLayer(params as any);
+      const res = await bridge.execute('reorderLayer', script, `Reorder layer ${params.layerName || params.layerIndex} (${params.operation})`, params);
+      return formatResponse(res);
+    }
+  );
+
   // --- 14. setLayerMask ---
   server.tool(
     'setLayerMask',
@@ -1221,6 +1258,22 @@ Use getInstalledPlugins to discover installed effects or test compatibility.`,
       });
 
       const res = await bridge.execute('exportPreviewVideo', script, 'Export preview video', params, { timeoutMs: 60000 });
+      return formatResponse(res);
+    }
+  );
+
+  // --- exportWithAME ---
+  server.tool(
+    'exportWithAME',
+    'Send composition to Adobe Media Encoder (AME) render queue for high-quality background rendering and encoding',
+    {
+      compName: z.string().optional().describe('Composition name to export (defaults to active comp)'),
+      outputPath: z.string().optional().describe('Target output video file path (.mp4 / .mov / .prores)'),
+      renderImmediately: z.boolean().optional().describe('Whether to start rendering in AME immediately (default: false)'),
+    },
+    async (params) => {
+      const script = snippets.scriptExportWithAME(params);
+      const res = await bridge.execute('exportWithAME', script, `Queue composition in Adobe Media Encoder`, params);
       return formatResponse(res);
     }
   );

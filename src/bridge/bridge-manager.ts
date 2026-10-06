@@ -144,17 +144,15 @@ export class BridgeManager {
         }
       }
 
-      // If panel doesn't pick up command after 3 seconds and AE executable is available,
-      // attempt CLI fallback (AfterFX.exe -r)
-      if (Date.now() - startTime > 3000 && !fallbackAttempted && config.aeExecutablePath) {
+      // Auto recovery: check if AE crashed or not connected
+      const status = this.getBridgeStatus();
+      if (!status.connected && !fallbackAttempted && config.aeExecutablePath && fs.existsSync(config.aeExecutablePath)) {
         fallbackAttempted = true;
-        const status = this.getBridgeStatus();
-        if (!status.connected) {
-          try {
-            await this.runViaCli(command);
-          } catch (cliErr) {
-            // CLI error logged, continue polling until timeout
-          }
+        console.error(`[AE Bridge] Detected After Effects disconnection/crash. Auto-relaunching AE via: ${config.aeExecutablePath}...`);
+        try {
+          await this.launchOrRelaunchAe();
+        } catch (relaunchErr) {
+          console.error('[AE Bridge] Failed to relaunch AE:', relaunchErr);
         }
       }
 
@@ -174,6 +172,35 @@ export class BridgeManager {
     });
 
     throw new Error(timeoutMsg);
+  }
+
+  public async launchOrRelaunchAe(): Promise<boolean> {
+    const config = ConfigManager.getInstance().getSettings();
+    if (!config.aeExecutablePath || !fs.existsSync(config.aeExecutablePath)) {
+      return false;
+    }
+
+    try {
+      // First clean up any Adobe Crash Processor or stuck processes
+      try {
+        await execAsync('taskkill /F /IM "Adobe Crash Processor.exe"');
+      } catch {}
+
+      // Check if AfterFX is running
+      const { stdout } = await execAsync('tasklist /FI "IMAGENAME eq AfterFX.exe"');
+      if (stdout.includes('AfterFX.exe')) {
+        // Process is alive but not sending heartbeat, don't double launch
+        return true;
+      }
+
+      console.error(`[AE Bridge] Launching After Effects at ${config.aeExecutablePath}...`);
+      const launchCmd = `start "" "${config.aeExecutablePath}"`;
+      await execAsync(launchCmd, { shell: 'cmd.exe' });
+      return true;
+    } catch (err) {
+      console.error('[AE Bridge] Failed to launch AE executable:', err);
+      return false;
+    }
   }
 
   private async runViaCli(command: BridgeCommand): Promise<void> {
