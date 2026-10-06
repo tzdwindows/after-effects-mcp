@@ -4,12 +4,13 @@ description: >-
   Comprehensive guide and standard operational procedures for After Effects motion design and Music PV production.
   Covers workspace directory structure (assets/render/aep), MIDI (.mid) musical analysis & melodic emotion decoding,
   audio & lyrics handling, procedural SVG vector generation, exhaustive music genre visual design playbooks (10+ genres),
+  autonomous Audiovisual Cohesion Evaluator subagent (AV-Alignment inspection for beat sync, kinetic energy, color-mood, and narrative fit),
   progressive performance pipeline (lightweight prototype -> user feedback -> final polish), and complete AE MCP toolchain integration.
 ---
 
 # After Effects Motion Design & Music PV Master Workflow (Skill)
 
-This skill guides AI agents on collaborating with users to create industry-grade After Effects animations and Music PVs (Promotional Videos) using the `after-effects-mcp` toolchain. It establishes strict rules for workspace structure, performance safeguarding against crashes, MIDI melody analysis & emotional decoding, comprehensive music genre visual styles, and an iterative user-driven lifecycle.
+This skill guides AI agents on collaborating with users to create industry-grade After Effects animations and Music PVs (Promotional Videos) using the `after-effects-mcp` toolchain. It establishes strict rules for workspace structure, performance safeguarding against crashes, MIDI melody analysis & emotional decoding, comprehensive music genre visual styles, subagent-driven Audiovisual Alignment Evaluation, and an iterative user-driven lifecycle.
 
 ---
 
@@ -32,11 +33,12 @@ flowchart TD
     I -- Yes --> K[Enforce Workspace Directory Standard]
     J --> K
     K --> L[Phase 0: Build Lightweight Prototype - Zero Lag]
-    L --> M[Present Preview & Solicit User Feedback]
-    M -- Issues Found / Revisions Requested --> N[Fix Bugs / Add Requested Elements]
-    M -- User Approves Prototype --> O[Phase 1 & 2: Polish Movement, Lighting & Fine Details]
-    N --> M
-    O --> P[Final Polish & Background AME Export]
+    L --> M[Dispatch Audiovisual Alignment Subagent to Evaluate Sync]
+    M --> N[Present Preview & Cohesion Report to User]
+    N -- Issues Found / Revisions Requested --> O[Fix Bugs / Adjust Keyframes & Hierarchy]
+    N -- User Approves Prototype --> P[Phase 1 & 2: Polish Movement, Lighting & Fine Details]
+    O --> N
+    P --> Q[Final Polish & Background AME Export]
 ```
 
 ### Step 1: Think First, Then Ask
@@ -84,7 +86,65 @@ If the user provides a `.mid` / MIDI file (or stems):
 
 ---
 
-## 2. Workspace Directory Specification
+## 2. Autonomous Audiovisual Cohesion Subagent (AV Alignment Evaluator)
+
+To guarantee that the created visual animation resonates deeply with the underlying music and audio, the primary Agent can dispatch a dedicated subagent (`invoke_subagent`) to independently analyze the degree of audiovisual cohesion (契合度) before delivering each milestone to the user.
+
+### 1. Subagent Invocation Specification
+- **Role**: `Audiovisual Cohesion Evaluator`
+- **Trigger**: Dispatched right after the prototype preview is exported (`exportPreviewVideo` or frame snapshots) or after a sequence of keyframe animations is applied.
+- **Tools Equipped**: Read tools (`view_file`), image/frame inspection, and audio spectrum/MIDI analysis.
+
+### 2. The 4 Dimensions of Audiovisual Cohesion (契合度四维评估准则)
+
+The subagent evaluates the project against 4 quantitative and qualitative dimensions:
+
+```mermaid
+graph LR
+    A[AV Cohesion Score / 100] --> B[1. Rhythm & Beat Sync 30%]
+    A --> C[2. Kinetic Energy & Dynamics 25%]
+    A --> D[3. Color Harmony & Emotional Mood 25%]
+    A --> E[4. Narrative & Lyric Symbiosis 20%]
+```
+
+1. **Rhythm & Beat Synchronization (节奏与重音契合度 - 30%)**:
+   - Do camera cuts, scene transitions, and typographic pops land precisely on strong beats, drum transients, or melody pitch jumps?
+   - Check keyframe timestamps against audio waveform peaks or MIDI note-on events.
+   - *Tolerance*: Sync deviation within ±1-2 frames is acceptable; off-beat keyframes by >3 frames trigger an alignment warning.
+
+2. **Kinetic Energy & Velocity Match (动能与动态曲线契合度 - 25%)**:
+   - Does visual motion speed match the sonic velocity?
+     - Fast BPM / aggressive synth drops -> high-influence snap easing (`influence: 75%-85%`), rapid directional shifts.
+     - Gentle piano / acoustic strumming -> gentle harmonic floating, smooth continuous inertia, soft elastic overshoot.
+   - Are climaxes (Drops / Crescendos) matched with visual scale bursts or lighting expansions?
+
+3. **Color Harmony & Emotional Mood (色彩氛围与情绪契合度 - 25%)**:
+   - Does the visual color scheme match the musical tonality (decoded from the MIDI mode or audio timbre)?
+     - Melancholy / Ballad: Desaturated slate blues, mist greys, warm lonely ambers.
+     - Warm / Cute / Healing: Pastel peaches, butter yellows, mint greens.
+     - Electronic / Cyber / Intense: Contrast midnight blacks with cyan/magenta neon.
+   - Is lighting softness/harshness congruent with vocal intimacy vs. stadium power?
+
+4. **Narrative & Lyric Symbiosis (叙事与歌词意象契合度 - 20%)**:
+   - Are lyrical keywords visualized metaphorically or symbolically (e.g., words about "collapse" accompanied by fractured shapes or downward camera tilt; words about "light" accompanied by glow bloom)?
+   - Are lyric subtitles legible, properly timed with `addTextAnimator`, and matching the song's pacing?
+
+### 3. Cohesion Report Format
+The subagent produces a concise Markdown report and returns it to the lead Agent:
+
+```markdown
+### 🎵 Audiovisual Cohesion Evaluation Report
+- **Overall Cohesion Score**: [88 / 100]
+- **Beat & Transient Sync**: [28 / 30] - Scene 2 transition landed precisely at bar 16 beat 1 (frame 480).
+- **Kinetic Energy Match**: [22 / 25] - Easing curve on Camera Rig matches the drum fill crescendo.
+- **Color & Mood Harmony**: [21 / 25] - Warm pastel matches the acoustic ukulele timbre.
+- **Narrative Symbiosis**: [17 / 20] - Subtitle timing is on beat; suggested adding floating note doodle around frame 320.
+- **Recommended Action**: Advance to user review, or tweak frame 310 keyframe by -2 frames to snap to the snare hit.
+```
+
+---
+
+## 3. Workspace Directory Specification
 
 All project files must strictly follow this clean directory architecture:
 
@@ -106,7 +166,7 @@ All project files must strictly follow this clean directory architecture:
 
 ---
 
-## 3. Staged Production & Performance Safeguards
+## 4. Staged Production & Performance Safeguards
 
 > [!CAUTION]
 > **Cardinal Rule**: Heavy motion blur, multi-pass blurs, unoptimized glow stacks, and complex 3D raytracing will severely degrade AE preview performance and trigger crashes. **The initial draft MUST be an ultra-lightweight prototype!**
@@ -121,7 +181,8 @@ All project files must strictly follow this clean directory architecture:
   - Deliver quick low-resolution MP4 previews (`exportPreviewVideo`, `scale: 0.5`, `fps: 30`) or frame snapshots (`exportFrame`).
 
 ### Phase 1: Iterative Feedback & Problem Rectification
-- Review the prototype with the user.
+- Dispatch the Audiovisual Alignment Subagent to evaluate cohesion.
+- Review the prototype and evaluation results with the user.
 - If the user notes stiffness: adjust keyframe easing curves with `setKeyframeVelocity` (e.g., `influence: 65% - 85%`).
 - If layer stacking order is wrong: use `reorderLayer` (`moveBefore`, `moveAfter`, `moveToBeginning`, `moveToEnd`).
 - If any bug occurs or user requests additions: solve specifically without disturbing existing working layers.
@@ -134,7 +195,7 @@ All project files must strictly follow this clean directory architecture:
 
 ---
 
-## 4. Universal Music Genre Visual Style Guide (Visual Aesthetics for All Genres)
+## 5. Universal Music Genre Visual Style Guide (Visual Aesthetics for All Genres)
 
 Every musical genre dictates a unique visual grammar, color harmony, typography dynamic, and camera kinetics:
 
@@ -246,7 +307,7 @@ Every musical genre dictates a unique visual grammar, color harmony, typography 
 
 ---
 
-## 5. AE MCP Tooling Quick Reference
+## 6. AE MCP Tooling Quick Reference
 
 | Tool | Core Responsibility | Strategic Advice |
 | :--- | :--- | :--- |
@@ -260,7 +321,7 @@ Every musical genre dictates a unique visual grammar, color harmony, typography 
 
 ---
 
-## 6. Crash Recovery & Resilience Guidelines
+## 7. Crash Recovery & Resilience Guidelines
 
 1. **Auto-Relaunch Recovery**:
    - The MCP bridge features autonomous crash detection. When `AfterFX.exe` exits unexpectedly, the daemon terminates stuck crash reporters and relaunches After Effects.
