@@ -142,21 +142,28 @@
     var savedPath = null;
     var snapshotFile = null;
 
-    if (cmd.autoSave && app.project) {
-      var saveMode = cmd.saveMode || "both";
-      if ((saveMode === "snapshot" || saveMode === "both") && cmd.snapshotPath) {
-        try {
-          var snapFile = new File(cmd.snapshotPath);
-          app.project.save(snapFile);
-          snapshotFile = snapFile.fsName;
-          appendLog(uiElements ? uiElements.logText : null, "Snapshot: " + snapFile.name);
-        } catch(se){}
-      }
-      if ((saveMode === "project" || saveMode === "both") && app.project.file) {
+    if (cmd.autoSave && app.project && app.project.file) {
+      var saveMode = cmd.saveMode || "project";
+      var curFsName = app.project.file.fsName;
+      var isSnapshotFile = (curFsName.indexOf(".ae-mcp") !== -1 && curFsName.indexOf("snapshot_") !== -1);
+
+      // 1. Always save the active user project in-place first (NEVER call app.project.save(snapFile) as that triggers Save-As and floods AE's File > Open Recent main menu!)
+      if (!isSnapshotFile && (saveMode === "project" || saveMode === "both")) {
         try {
           app.project.save();
           savedPath = app.project.file.fsName;
         } catch(pe){}
+      }
+
+      // 2. If snapshot backup is enabled, copy the saved .aep file at the OS file level so AE's menu and active project path are never polluted
+      if (!isSnapshotFile && (saveMode === "snapshot" || saveMode === "both") && cmd.snapshotPath) {
+        try {
+          var snapFile = new File(cmd.snapshotPath);
+          if (app.project.file.copy(snapFile)) {
+            snapshotFile = snapFile.fsName;
+            appendLog(uiElements ? uiElements.logText : null, "Snapshot (Silent Copy): " + snapFile.name);
+          }
+        } catch(se){}
       }
     }
 
@@ -495,7 +502,101 @@
     writeFile(aiReqFile, JSON.stringify(fetchReq, null, 2));
   };
 
-  // ==================== TAB 3: 桥接与系统日志 ====================
+  // ==================== TAB 3: 音画对齐与DOVER评分 ====================
+  var tabAux = tabs.add("tab", undefined, "音画对齐与DOVER评分");
+  tabAux.orientation = "column";
+  tabAux.alignChildren = ["fill", "top"];
+  tabAux.spacing = 5;
+
+  // Audio Path row
+  var audRow = tabAux.add("group");
+  audRow.orientation = "row";
+  audRow.add("statictext", undefined, "音频文件:");
+  var audPathEdit = audRow.add("edittext", undefined, "");
+  audPathEdit.preferredSize = [180, -1];
+  var audBrowseBtn = audRow.add("button", undefined, "浏览...");
+  audBrowseBtn.onClick = function() {
+    var f = File.openDialog("选择音频文件 (.mp3, .wav, .flac, .m4a)");
+    if (f) audPathEdit.text = f.fsName;
+  };
+
+  // LRC / Lyrics Path row
+  var lrcRow = tabAux.add("group");
+  lrcRow.orientation = "row";
+  lrcRow.add("statictext", undefined, "歌词LRC:");
+  var lrcPathEdit = lrcRow.add("edittext", undefined, "");
+  lrcPathEdit.preferredSize = [180, -1];
+  var lrcBrowseBtn = lrcRow.add("button", undefined, "浏览...");
+  lrcBrowseBtn.onClick = function() {
+    var f = File.openDialog("选择歌词文件 (.lrc, .txt)");
+    if (f) lrcPathEdit.text = f.fsName;
+  };
+
+  // Video Path row for DOVER-Mobile
+  var vidRow = tabAux.add("group");
+  vidRow.orientation = "row";
+  vidRow.add("statictext", undefined, "评分视频:");
+  var vidPathEdit = vidRow.add("edittext", undefined, "");
+  vidPathEdit.preferredSize = [180, -1];
+  var vidBrowseBtn = vidRow.add("button", undefined, "浏览...");
+  vidBrowseBtn.onClick = function() {
+    var f = File.openDialog("选择渲染预览视频 (.mp4, .mov, .avi)");
+    if (f) vidPathEdit.text = f.fsName;
+  };
+
+  // Action Buttons for Auxiliary Features
+  var auxBtnRow = tabAux.add("group");
+  auxBtnRow.orientation = "row";
+  var btnBeatSync = auxBtnRow.add("button", undefined, "提取鼓点并打标");
+  var btnMMSAlign = auxBtnRow.add("button", undefined, "MMS-CTC 精准对齐字幕");
+  var btnDoverScore = auxBtnRow.add("button", undefined, "DOVER-Mobile 视频打分");
+
+  var auxStatusBox = tabAux.add("edittext", undefined, "支持功能：\n1. 多频段鼓点/BPM节拍检测并自动注入AE时间线标记\n2. MMS-Align / CTC-Segmentation 声学强制对齐字幕\n3. 内置 DOVER-Mobile 神经网络视频质量与音画同步打分", { multiline: true, readonly: true });
+  auxStatusBox.preferredSize = [-1, 105];
+
+  btnBeatSync.onClick = function() {
+    if (!audPathEdit.text) { alert("请先选择音频文件路径。"); return; }
+    auxStatusBox.text = "正在分析音频 BPM、小节重拍与多频段鼓点 (Kick/Snare/HiHat)...";
+    var reqId = "aux-beat-" + new Date().getTime();
+    waitingForAIId = reqId;
+    writeFile(aiReqFile, JSON.stringify({
+      id: reqId,
+      type: "analyze_audio_beats",
+      timestamp: new Date().getTime(),
+      audioPath: audPathEdit.text
+    }, null, 2));
+  };
+
+  btnMMSAlign.onClick = function() {
+    if (!audPathEdit.text) { alert("请先选择音频文件路径。"); return; }
+    auxStatusBox.text = "正在运行 MMS-Align / CTC-Segmentation 声学强制对齐模型...";
+    var reqId = "aux-mms-" + new Date().getTime();
+    waitingForAIId = reqId;
+    writeFile(aiReqFile, JSON.stringify({
+      id: reqId,
+      type: "align_lyrics_mms",
+      timestamp: new Date().getTime(),
+      audioPath: audPathEdit.text,
+      lrcPath: lrcPathEdit.text || undefined,
+      granularity: "line"
+    }, null, 2));
+  };
+
+  btnDoverScore.onClick = function() {
+    if (!vidPathEdit.text) { alert("请先选择要评分的视频文件路径 (.mp4 / .mov)。"); return; }
+    auxStatusBox.text = "正在调用内置 DOVER-Mobile (ConvNeXtV2-Femto-3D) 模型对视频进行技术与美学质量打分...";
+    var reqId = "aux-dover-" + new Date().getTime();
+    waitingForAIId = reqId;
+    writeFile(aiReqFile, JSON.stringify({
+      id: reqId,
+      type: "evaluate_video_dover",
+      timestamp: new Date().getTime(),
+      videoPath: vidPathEdit.text,
+      audioPath: audPathEdit.text || undefined
+    }, null, 2));
+  };
+
+  // ==================== TAB 4: 桥接与系统日志 ====================
   var tabBridge = tabs.add("tab", undefined, "桥接与系统日志");
   tabBridge.orientation = "column";
   tabBridge.alignChildren = ["fill", "top"];
@@ -586,6 +687,30 @@
         } else {
           aiStatusBox.text = "处理失败: " + (resp.error || "未知错误");
         }
+      } else if (resp.type === "analyze_audio_beats" || resp.type === "align_lyrics_mms") {
+        if (resp.success) {
+          if (resp.script && app.project && app.project.activeItem && app.project.activeItem instanceof CompItem) {
+            try {
+              app.beginUndoGroup("MCP Aux: " + resp.type);
+              var comp = app.project.activeItem;
+              eval(resp.script);
+              app.endUndoGroup();
+            } catch(auxErr) {
+              try { app.endUndoGroup(); } catch(ue){}
+            }
+          }
+          auxStatusBox.text = resp.explanation || "处理完成。";
+          appendLog(logText, resp.explanation || ("完成: " + resp.type));
+        } else {
+          auxStatusBox.text = "执行失败: " + (resp.error || "未知错误");
+        }
+      } else if (resp.type === "evaluate_video_dover") {
+        if (resp.success) {
+          auxStatusBox.text = resp.explanation || "DOVER-Mobile 评分完成。";
+          appendLog(logText, resp.explanation || "完成 DOVER-Mobile 评分");
+        } else {
+          auxStatusBox.text = "DOVER-Mobile 评分失败: " + (resp.error || "未知错误");
+        }
       }
     }
   }
@@ -631,6 +756,29 @@
   }
 
   // Init display
+  function cleanSnapshotEntriesFromMRU() {
+    try {
+      var sec = "MRU";
+      var cleaned = false;
+      for (var i = 0; i < 25; i++) {
+        var keyPath = "MRU Project Path ID # " + i + ", File Path";
+        if (app.preferences && app.preferences.havePref && app.preferences.havePref(sec, keyPath)) {
+          var val = app.preferences.getPrefAsString(sec, keyPath);
+          if (val && val.indexOf("snapshot_") !== -1 && val.indexOf(".ae-mcp") !== -1) {
+            app.preferences.deletePref(sec, keyPath);
+            try { app.preferences.deletePref(sec, "MRU Project Path ID # " + i + ", IsAnywhere"); } catch(e1){}
+            try { app.preferences.deletePref(sec, "MRU Project Path ID # " + i + ", Last Opened"); } catch(e2){}
+            cleaned = true;
+          }
+        }
+      }
+      if (cleaned && app.preferences.saveToDisk) {
+        app.preferences.saveToDisk();
+      }
+    } catch(e){}
+  }
+
+  cleanSnapshotEntriesFromMRU();
   updateSelectedLayerDisplay();
   __aeMcpPoll();
 

@@ -1,14 +1,14 @@
 {
   "name": "after-effects-mcp",
-  "version": "1.0.0",
-  "description": "Comprehensive Model Context Protocol (MCP) server for Adobe After Effects",
+  "version": "1.1.0",
+  "description": "Comprehensive Model Context Protocol (MCP) server for Adobe After Effects with Audio Beat Sync, MMS/CTC Forced Lyric Alignment, and Bundled DOVER-Mobile Video Quality Assessment",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
     "after-effects-mcp": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node -e \"const fs=require('fs'); fs.mkdirSync('dist/scripts',{recursive:true}); fs.copyFileSync('src/scripts/mcp-bridge-auto.jsx','dist/scripts/mcp-bridge-auto.jsx');\"",
     "prestart": "npm run build",
     "start": "node dist/index.js",
     "install-bridge": "node dist/scripts/installer.js"
@@ -26,6 +26,7 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
+    "onnxruntime-node": "^1.30.0",
     "zod": "^3.24.2"
   },
   "devDependencies": {

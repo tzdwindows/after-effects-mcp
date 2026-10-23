@@ -62,12 +62,22 @@ export interface AIConfig {
 
 export interface AIRequest {
   id: string;
-  type: 'modify_layer' | 'fetch_models';
+  type:
+    | 'modify_layer'
+    | 'fetch_models'
+    | 'analyze_audio_beats'
+    | 'align_lyrics_mms'
+    | 'evaluate_video_dover';
   timestamp: number;
   prompt?: string;
   layerInfo?: any;
   compInfo?: any;
   imagePath?: string;
+  audioPath?: string;
+  lrcPath?: string;
+  videoPath?: string;
+  markerMode?: 'downbeats_and_impacts' | 'all_beats' | 'drums_only' | 'impacts_only';
+  granularity?: 'line' | 'word';
   configOverride?: Partial<AIConfig>;
 }
 
@@ -75,10 +85,16 @@ export interface AIResponse {
   id: string;
   timestamp: number;
   success: boolean;
-  type: 'modify_layer' | 'fetch_models';
+  type:
+    | 'modify_layer'
+    | 'fetch_models'
+    | 'analyze_audio_beats'
+    | 'align_lyrics_mms'
+    | 'evaluate_video_dover';
   script?: string;
   explanation?: string;
   models?: string[];
+  data?: any;
   error?: string;
 }
 

@@ -11,8 +11,8 @@ const CONFIG_FILE = path.join(DEFAULT_BRIDGE_DIR, 'config.json');
 const DEFAULT_SETTINGS: MCPSettings = {
   autoSave: true,
   autoRecordHistory: true,
-  saveMode: 'both',
-  maxHistory: 50,
+  saveMode: 'project',
+  maxHistory: 30,
   timeoutMs: 15000,
   bridgeDir: DEFAULT_BRIDGE_DIR,
 };

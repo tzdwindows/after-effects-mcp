@@ -2,6 +2,9 @@ import fs from 'fs';
 import path from 'path';
 import { AIConfig, AIRequest, AIResponse } from '../types/index.js';
 import { ConfigManager } from '../config/index.js';
+import { analyzeAudioRhythm } from '../audio/beat-analyzer.js';
+import { alignLyricsWithMMS } from '../audio/mms-aligner.js';
+import { evaluateVideoWithDOVER } from '../video/dover-scorer.js';
 
 const DEFAULT_AI_CONFIG: AIConfig = {
   apiKey: '',
@@ -274,6 +277,122 @@ Instructions:
         response.success = true;
         response.script = result.script;
         response.explanation = result.explanation;
+      } else if (req.type === 'analyze_audio_beats') {
+        if (!req.audioPath) throw new Error('Audio path is required.');
+        const analysis = analyzeAudioRhythm(req.audioPath);
+        const markers: { time: number; comment: string; label: number }[] = [];
+        for (const b of analysis.beats) {
+          if (b.isDownbeat) {
+            markers.push({
+              time: b.time,
+              comment: `BAR ${b.barIndex} [DOWNBEAT - ${analysis.bpm} BPM]`,
+              label: 1,
+            });
+          }
+        }
+        for (const imp of analysis.drumOnsets.majorImpacts) {
+          if (!markers.some((m) => Math.abs(m.time - imp.time) < 0.045)) {
+            markers.push({
+              time: imp.time,
+              comment: `DRUM IMPACT (${imp.strength})`,
+              label: 2,
+            });
+          }
+        }
+        markers.sort((a, b) => a.time - b.time);
+
+        const markerScript = `
+          var items = ${JSON.stringify(markers)};
+          for (var i = 0; i < items.length; i++) {
+            var mv = new MarkerValue(items[i].comment);
+            try { mv.label = items[i].label; } catch(e){}
+            comp.markerProperty.setValueAtTime(items[i].time, mv);
+          }
+        `;
+        response.success = true;
+        response.script = markerScript;
+        response.data = {
+          bpm: analysis.bpm,
+          bpmConfidence: analysis.bpmConfidence,
+          counts: analysis.counts,
+          sections: analysis.sections,
+          markersCount: markers.length,
+        };
+        response.explanation = `BPM: ${analysis.bpm} (置信度: ${analysis.bpmConfidence}) | 总拍数: ${analysis.counts.totalBeats} | 小节重拍: ${analysis.counts.totalBars} | Kick底鼓: ${analysis.counts.kickCount} | Snare军鼓: ${analysis.counts.snareCount} | 强冲击点: ${analysis.counts.majorImpactCount}`;
+      } else if (req.type === 'align_lyrics_mms') {
+        if (!req.audioPath) throw new Error('Audio path is required.');
+        const alignment = await alignLyricsWithMMS(req.audioPath, {
+          lrcFilePath: req.lrcPath,
+          lyricsText: req.prompt,
+          snapWordsToBeats: true,
+        });
+        const items: { name: string; text: string; inPoint: number; outPoint: number }[] = [];
+        const gran = req.granularity || 'line';
+        if (gran === 'word') {
+          for (const line of alignment.lines) {
+            for (let wIdx = 0; wIdx < line.words.length; wIdx++) {
+              const w = line.words[wIdx];
+              items.push({
+                name: `MMS_WORD_${line.lineIndex}_${wIdx + 1}_${w.word}`,
+                text: w.word,
+                inPoint: w.startTime,
+                outPoint: w.endTime,
+              });
+            }
+          }
+        } else {
+          for (const line of alignment.lines) {
+            items.push({
+              name: `MMS_LYRIC_${line.lineIndex}_${line.text.substring(0, 18)}`,
+              text: line.text,
+              inPoint: line.startTime,
+              outPoint: line.endTime,
+            });
+          }
+        }
+        const genScript = `
+          var items = ${JSON.stringify(items)};
+          for (var i = 0; i < items.length; i++) {
+            var it = items[i];
+            var lyr = comp.layers.addText(it.text);
+            lyr.name = it.name;
+            lyr.inPoint = it.inPoint;
+            lyr.outPoint = Math.max(it.inPoint + 0.08, it.outPoint);
+            lyr.threeDLayer = true;
+            var srcTxtProp = lyr.property("ADBE Text Properties").property("ADBE Text Document");
+            var td = srcTxtProp.value;
+            td.fontSize = 86;
+            td.fillColor = [1, 1, 1];
+            td.justification = ParagraphJustification.CENTER_JUSTIFY;
+            srcTxtProp.setValue(td);
+            var rect = lyr.sourceRectAtTime(it.inPoint + 0.02, false);
+            var xform = lyr.property("ADBE Transform Group");
+            xform.property("ADBE Anchor Point").setValue([rect.left + rect.width / 2, rect.top + rect.height / 2, 0]);
+            xform.property("ADBE Position").setValue([comp.width / 2, comp.height / 2, 0]);
+            var scaleProp = xform.property("ADBE Scale");
+            scaleProp.setValueAtTime(it.inPoint, [30, 30, 30]);
+            scaleProp.setValueAtTime(Math.min(lyr.outPoint - 0.01, it.inPoint + 0.11), [115, 115, 115]);
+            scaleProp.setValueAtTime(Math.min(lyr.outPoint, it.inPoint + 0.18), [100, 100, 100]);
+          }
+        `;
+        response.success = true;
+        response.script = genScript;
+        response.data = alignment;
+        response.explanation = `MMS-Align / CTC-Segmentation 对齐完成！共对齐 ${alignment.totalLines} 行 (${alignment.totalWords} 个词)，平均置信度 ${alignment.averageConfidence}，已生成 ${items.length} 个精准卡点3D字幕层。`;
+      } else if (req.type === 'evaluate_video_dover') {
+        if (!req.videoPath) throw new Error('Video path is required.');
+        const scoreRes = await evaluateVideoWithDOVER(req.videoPath, {
+          audioPath: req.audioPath,
+        });
+        response.success = true;
+        response.data = scoreRes;
+        response.explanation =
+          `[DOVER-Mobile 评分报告] 综合总分: ${scoreRes.scores.overallScore}/100 (等级 ${scoreRes.scores.qualityGrade}) | ` +
+          `技术质量(TQE): ${scoreRes.scores.technicalScore}/100 | 美学质量(AQE): ${scoreRes.scores.aestheticScore}/100` +
+          (scoreRes.scores.audioVisualSyncScore !== undefined
+            ? ` | 音画卡点同步分: ${scoreRes.scores.audioVisualSyncScore}/100`
+            : '') +
+          `\n建议: ${scoreRes.recommendations.join(' ')}`;
       }
     } catch (err: any) {
       response.success = false;

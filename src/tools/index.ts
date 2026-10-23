@@ -6,8 +6,11 @@ import { BridgeManager } from '../bridge/bridge-manager.js';
 import { ConfigManager } from '../config/index.js';
 import { HistoryManager } from '../history/index.js';
 import { AIService } from '../ai/ai-service.js';
-import { installBridgeScript } from '../scripts/installer.js';
+import { installBridgeScript, cleanScriptUIPanelBackups } from '../scripts/installer.js';
 import * as snippets from '../extendscript/snippets.js';
+import { analyzeAudioRhythm } from '../audio/beat-analyzer.js';
+import { alignLyricsWithMMS } from '../audio/mms-aligner.js';
+import { evaluateVideoWithDOVER } from '../video/dover-scorer.js';
 
 export function registerAllTools(server: McpServer): void {
   const bridge = BridgeManager.getInstance();
@@ -935,12 +938,25 @@ Use getInstalledPlugins to discover installed effects or test compatibility.`,
   // --- 28. installBridge ---
   server.tool(
     'installBridge',
-    'Automatically detect After Effects installations and install the mcp-bridge-auto.jsx panel script to ScriptUI Panels',
+    'Automatically detect After Effects installations and install the mcp-bridge-auto.jsx panel script to ScriptUI Panels (with automatic menu backup cleanup)',
     {
       targetDir: z.string().optional().describe('Optional custom ScriptUI Panels directory path'),
     },
     async (params) => {
       const res = installBridgeScript(params.targetDir);
+      return formatResponse(res);
+    }
+  );
+
+  // --- cleanBridgeBackups ---
+  server.tool(
+    'cleanBridgeBackups',
+    'Scan After Effects ScriptUI Panels and clean up any backup/duplicate jsx files that cause clutter in the Window menu',
+    {
+      targetDir: z.string().optional().describe('Optional custom ScriptUI Panels directory path'),
+    },
+    async (params) => {
+      const res = cleanScriptUIPanelBackups(params.targetDir ? [params.targetDir] : undefined);
       return formatResponse(res);
     }
   );
@@ -1414,6 +1430,342 @@ Use getInstalledPlugins to discover installed effects or test compatibility.`,
         executionResult: execRes.data,
         autoSaved: execRes.autoSaved,
       });
+    }
+  );
+
+  // --- 49. analyzeAudioRhythm ---
+  server.tool(
+    'analyzeAudioRhythm',
+    'Extract exact BPM, beat grid, 4/4 downbeats, sub-band drum onsets (Kick 20-150Hz, Snare 150-2500Hz, Hi-Hat 2500-10500Hz), major impact points, energy envelope, and structural sections (Intro / Buildup / Climax Drop / Outro) from an audio or video file to help align VFX, camera cuts, and text animations to music.',
+    {
+      audioPath: z.string().describe('Absolute or relative path to the audio or video file (.mp3, .wav, .flac, .m4a, .mp4)'),
+      startTime: z.number().optional().describe('Optional start time in seconds to analyze'),
+      endTime: z.number().optional().describe('Optional end time in seconds to analyze'),
+      minBpm: z.number().optional().describe('Minimum BPM search bound (default: 70)'),
+      maxBpm: z.number().optional().describe('Maximum BPM search bound (default: 190)'),
+      sensitivity: z.number().optional().describe('Drum onset detection sensitivity from 0.1 to 1.0 (default: 0.55)'),
+    },
+    async (params) => {
+      const result = analyzeAudioRhythm(params.audioPath, {
+        startTime: params.startTime,
+        endTime: params.endTime,
+        minBpm: params.minBpm,
+        maxBpm: params.maxBpm,
+        sensitivity: params.sensitivity,
+      });
+      return formatResponse(result);
+    }
+  );
+
+  // --- 50. applyBeatMarkersToComp ---
+  server.tool(
+    'applyBeatMarkersToComp',
+    'Analyze audio beats & drum hits and automatically inject labeled markers (Downbeats, Beats, Kick, Snare, Major Impacts) into an After Effects composition or target layer.',
+    {
+      audioPath: z.string().describe('Path to the audio file to analyze'),
+      compName: z.string().optional().describe('Target composition name (defaults to active composition)'),
+      layerName: z.string().optional().describe('Optional layer name to place markers on (if omitted, places markers on the composition timeline)'),
+      markerMode: z
+        .enum(['downbeats_and_impacts', 'all_beats', 'drums_only', 'impacts_only'])
+        .optional()
+        .describe('Which rhythm events to add as markers (default: downbeats_and_impacts)'),
+      startTime: z.number().optional().describe('Start time in seconds'),
+      endTime: z.number().optional().describe('End time in seconds'),
+      clearExistingMarkers: z.boolean().optional().describe('Clear existing markers before adding (default: false)'),
+    },
+    async (params) => {
+      const analysis = analyzeAudioRhythm(params.audioPath, {
+        startTime: params.startTime,
+        endTime: params.endTime,
+      });
+
+      const mode = params.markerMode || 'downbeats_and_impacts';
+      const markersToApply: { time: number; comment: string; label: number }[] = [];
+
+      if (mode === 'all_beats') {
+        for (const b of analysis.beats) {
+          markersToApply.push({
+            time: b.time,
+            comment: b.isDownbeat
+              ? `BAR ${b.barIndex} [DOWNBEAT - ${b.dominantDrum.toUpperCase()}]`
+              : `Beat ${b.barIndex}.${b.beatInBar} (${b.dominantDrum})`,
+            label: b.isDownbeat ? 1 : 9, // Red for downbeat, Green for beat
+          });
+        }
+      } else if (mode === 'drums_only') {
+        for (const k of analysis.drumOnsets.kick) {
+          markersToApply.push({ time: k.time, comment: `KICK (${k.strength})`, label: 1 });
+        }
+        for (const s of analysis.drumOnsets.snare) {
+          markersToApply.push({ time: s.time, comment: `SNARE (${s.strength})`, label: 4 });
+        }
+      } else if (mode === 'impacts_only') {
+        for (const imp of analysis.drumOnsets.majorImpacts) {
+          markersToApply.push({
+            time: imp.time,
+            comment: `IMPACT [${imp.type}] (${imp.strength})`,
+            label: 2, // Yellow
+          });
+        }
+      } else {
+        // downbeats_and_impacts
+        for (const b of analysis.beats) {
+          if (b.isDownbeat) {
+            markersToApply.push({
+              time: b.time,
+              comment: `BAR ${b.barIndex} DOWNBEAT (${analysis.bpm} BPM)`,
+              label: 1,
+            });
+          }
+        }
+        for (const imp of analysis.drumOnsets.majorImpacts) {
+          // Avoid duplicate marker within 40ms of a downbeat
+          if (!markersToApply.some((m) => Math.abs(m.time - imp.time) < 0.045)) {
+            markersToApply.push({
+              time: imp.time,
+              comment: `DRUM IMPACT (${imp.strength})`,
+              label: 2,
+            });
+          }
+        }
+      }
+
+      markersToApply.sort((a, b) => a.time - b.time);
+
+      const script = `(function() {
+        ${snippets.ExtendScriptHelpers}
+        var comp = __findComp(${JSON.stringify(params.compName)});
+        var targetProp = comp.markerProperty;
+        var targetName = comp.name + " (Comp Timeline)";
+        if (${JSON.stringify(Boolean(params.layerName))}) {
+          var lyr = __findLayer(comp, ${JSON.stringify(params.layerName)});
+          targetProp = lyr.property("ADBE Marker");
+          targetName = lyr.name;
+        }
+        if (${JSON.stringify(Boolean(params.clearExistingMarkers))}) {
+          for (var k = targetProp.numKeys; k >= 1; k--) {
+            targetProp.removeKey(k);
+          }
+        }
+        var items = ${JSON.stringify(markersToApply)};
+        for (var i = 0; i < items.length; i++) {
+          var mv = new MarkerValue(items[i].comment);
+          if (items[i].label !== undefined) {
+            try { mv.label = items[i].label; } catch(e){}
+          }
+          targetProp.setValueAtTime(items[i].time, mv);
+        }
+        return {
+          target: targetName,
+          markersAdded: items.length,
+          bpm: ${analysis.bpm}
+        };
+      })()`;
+
+      const res = await bridge.execute(
+        'applyBeatMarkersToComp',
+        script,
+        `Add ${markersToApply.length} beat/drum markers (${analysis.bpm} BPM)`,
+        params
+      );
+
+      return formatResponse({
+        success: true,
+        bpm: analysis.bpm,
+        markersInjected: markersToApply.length,
+        aeResult: res.data,
+        sections: analysis.sections,
+      });
+    }
+  );
+
+  // --- 51. alignLyricsWithMMS ---
+  server.tool(
+    'alignLyricsWithMMS',
+    'Perform frame-accurate forced alignment of lyrics/subtitles against an audio file using bundled MMS-Align / CTC-Segmentation (Neural CTC ONNX + Silero VAD v6 + Viterbi CTC-Segmentation trellis). Returns exact word-level and line-level timestamps, confidence scores, LRC drift corrections, and nearest drum beat offsets.',
+    {
+      audioPath: z.string().describe('Path to the audio file (.mp3, .wav, .flac, .m4a)'),
+      lrcFilePath: z.string().optional().describe('Optional path to a .lrc lyric file (if omitted, automatically looks for a matching .lrc file or uses lyricsText)'),
+      lyricsText: z.string().optional().describe('Optional raw lyrics text or LRC-formatted text string'),
+      startTime: z.number().optional().describe('Optional start time in seconds to filter alignment'),
+      endTime: z.number().optional().describe('Optional end time in seconds to filter alignment'),
+      snapWordsToBeats: z.boolean().optional().describe('Whether to automatically snap word entrances within tolerance to the nearest drum/beat transient (default: false)'),
+      maxSnapToleranceMs: z.number().optional().describe('Maximum tolerance in milliseconds when snapping words to beats (default: 75)'),
+    },
+    async (params) => {
+      const result = await alignLyricsWithMMS(params.audioPath, {
+        lrcFilePath: params.lrcFilePath,
+        lyricsText: params.lyricsText,
+        startTime: params.startTime,
+        endTime: params.endTime,
+        snapWordsToBeats: params.snapWordsToBeats,
+        maxSnapToleranceMs: params.maxSnapToleranceMs,
+      });
+      return formatResponse(result);
+    }
+  );
+
+  // --- 52. createAlignedLyricLayers ---
+  server.tool(
+    'createAlignedLyricLayers',
+    'Run MMS-Align / CTC-Segmentation on audio + lyrics and automatically generate (or re-align) 3D kinetic typography text layers in the After Effects composition with beat-locked pop/fade animations.',
+    {
+      audioPath: z.string().describe('Path to the audio file (.mp3, .wav, etc.)'),
+      lrcFilePath: z.string().optional().describe('Optional path to .lrc file'),
+      lyricsText: z.string().optional().describe('Optional raw lyrics or LRC text'),
+      compName: z.string().optional().describe('Target composition name in After Effects (defaults to active comp)'),
+      granularity: z
+        .enum(['line', 'word'])
+        .optional()
+        .describe('Create one text layer per lyric line ("line") or per individual word ("word", default: "line")'),
+      startTime: z.number().optional().describe('Optional start time in seconds'),
+      endTime: z.number().optional().describe('Optional end time in seconds'),
+      snapWordsToBeats: z.boolean().optional().describe('Snap text entrances to nearest beat within 75ms (default: true)'),
+      fontSize: z.number().optional().describe('Font size in pixels (default: 88)'),
+      threeDLayer: z.boolean().optional().describe('Enable 3D layer switch and Z-pop kinetic entrance (default: true)'),
+    },
+    async (params) => {
+      const alignment = await alignLyricsWithMMS(params.audioPath, {
+        lrcFilePath: params.lrcFilePath,
+        lyricsText: params.lyricsText,
+        startTime: params.startTime,
+        endTime: params.endTime,
+        snapWordsToBeats: params.snapWordsToBeats ?? true,
+      });
+
+      const gran = params.granularity || 'line';
+      const fontSize = params.fontSize || 88;
+      const is3D = params.threeDLayer !== false;
+
+      const itemsToCreate: {
+        name: string;
+        text: string;
+        inPoint: number;
+        outPoint: number;
+      }[] = [];
+
+      if (gran === 'word') {
+        for (const line of alignment.lines) {
+          for (let wIdx = 0; wIdx < line.words.length; wIdx++) {
+            const w = line.words[wIdx];
+            itemsToCreate.push({
+              name: `MMS_WORD_${line.lineIndex}_${wIdx + 1}_${w.word}`,
+              text: w.word,
+              inPoint: w.startTime,
+              outPoint: w.endTime,
+            });
+          }
+        }
+      } else {
+        for (const line of alignment.lines) {
+          itemsToCreate.push({
+            name: `MMS_LYRIC_${line.lineIndex}_${line.text.substring(0, 18)}`,
+            text: line.text,
+            inPoint: line.startTime,
+            outPoint: line.endTime,
+          });
+        }
+      }
+
+      const script = `(function() {
+        ${snippets.ExtendScriptHelpers}
+        var comp = __findComp(${JSON.stringify(params.compName)});
+        var items = ${JSON.stringify(itemsToCreate)};
+        var created = 0;
+        for (var i = 0; i < items.length; i++) {
+          var it = items[i];
+          var lyr = comp.layers.addText(it.text);
+          lyr.name = it.name;
+          lyr.inPoint = it.inPoint;
+          lyr.outPoint = Math.max(it.inPoint + 0.08, it.outPoint);
+          lyr.threeDLayer = ${JSON.stringify(is3D)};
+
+          var srcTxtProp = lyr.property("ADBE Text Properties").property("ADBE Text Document");
+          var td = srcTxtProp.value;
+          td.fontSize = ${fontSize};
+          td.fillColor = [1, 1, 1];
+          td.applyStroke = true;
+          td.strokeColor = [0.0, 0.88, 1.0];
+          td.strokeWidth = 3;
+          td.justification = ParagraphJustification.CENTER_JUSTIFY;
+          srcTxtProp.setValue(td);
+
+          // Center anchor point on text bounds
+          var rect = lyr.sourceRectAtTime(it.inPoint + 0.02, false);
+          var xform = lyr.property("ADBE Transform Group");
+          xform.property("ADBE Anchor Point").setValue([rect.left + rect.width / 2, rect.top + rect.height / 2, 0]);
+          xform.property("ADBE Position").setValue([comp.width / 2, comp.height / 2, 0]);
+
+          // Kinetic entrance & exit
+          var scaleProp = xform.property("ADBE Scale");
+          var opacProp = xform.property("ADBE Opacity");
+          var t0 = it.inPoint;
+          var tPop = Math.min(it.outPoint - 0.02, t0 + 0.10);
+          var tSettle = Math.min(it.outPoint - 0.01, t0 + 0.18);
+          var tOut = lyr.outPoint;
+
+          scaleProp.setValueAtTime(t0, [25, 25, 25]);
+          scaleProp.setValueAtTime(tPop, [118, 118, 118]);
+          scaleProp.setValueAtTime(tSettle, [100, 100, 100]);
+
+          opacProp.setValueAtTime(t0, 0);
+          opacProp.setValueAtTime(Math.min(tOut, t0 + 0.06), 100);
+          if (tOut - t0 > 0.22) {
+            opacProp.setValueAtTime(tOut - 0.07, 100);
+            opacProp.setValueAtTime(tOut, 0);
+          }
+
+          var glow = lyr.property("ADBE Effect Parade").addProperty("ADBE Glo2");
+          if (glow) {
+            try {
+              glow.property(2).setValue(45);
+              glow.property(3).setValue(75);
+              glow.property(4).setValue(1.8);
+            } catch(ge){}
+          }
+          created++;
+        }
+        return { createdLayers: created, compName: comp.name };
+      })()`;
+
+      const aeRes = await bridge.execute(
+        'createAlignedLyricLayers',
+        script,
+        `Create ${itemsToCreate.length} MMS-aligned lyric layers`,
+        params
+      );
+
+      return formatResponse({
+        success: true,
+        aeResult: aeRes.data,
+        alignmentSummary: {
+          totalLines: alignment.totalLines,
+          totalWords: alignment.totalWords,
+          averageConfidence: alignment.averageConfidence,
+          bpm: alignment.bpm,
+        },
+        lines: alignment.lines,
+      });
+    }
+  );
+
+  // --- 53. evaluateVideoWithDOVER ---
+  server.tool(
+    'evaluateVideoWithDOVER',
+    'Score a rendered video (.mp4, .mov, .avi) using the bundled DOVER-Mobile (Disentangled Objective Video Quality Evaluator - ConvNeXtV2-Femto-3D ONNX) model. Returns Technical Quality Score (0-100), Aesthetic Quality Score (0-100), Fused Overall Score (0-100), Audio-Visual Beat Sync Score (0-100), dataset percentiles, per-segment diagnostics, and actionable AI improvement feedback.',
+    {
+      videoPath: z.string().describe('Path to the rendered video file (.mp4, .mov, .avi) to evaluate'),
+      audioPath: z.string().optional().describe('Optional path to original audio file if the preview video was rendered without audio, used to compute Audio-Visual Rhythm Sync Score'),
+      startTime: z.number().optional().describe('Optional start time in seconds to evaluate'),
+      endTime: z.number().optional().describe('Optional end time in seconds to evaluate'),
+    },
+    async (params) => {
+      const result = await evaluateVideoWithDOVER(params.videoPath, {
+        audioPath: params.audioPath,
+        startTime: params.startTime,
+        endTime: params.endTime,
+      });
+      return formatResponse(result);
     }
   );
 }

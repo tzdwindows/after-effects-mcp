@@ -34,10 +34,10 @@ npm run build
 npm run install-bridge
 ```
 
-#### 方法 B：手动下载与安装（从 Release 下载）
-1. 前往 [Releases 页面](https://github.com/tzdwindows/after-effects-mcp/releases/latest) 下载 `mcp-bridge-panel-v1.0.0.zip`。
-2. 解压得到 `mcp-bridge-auto.jsx` 文件。
-3. 将该文件复制到您的 After Effects 安装目录下的 `ScriptUI Panels` 文件夹中：
+#### 方法 B：从 GitHub Releases 下载完整安装包（推荐开箱即用）
+1. 前往 [Releases 页面](https://github.com/tzdwindows/after-effects-mcp/releases/latest) 下载完整打包程序 **`after-effects-mcp-v1.1.0-complete.zip`**（内含已编译的 `dist/index.js`、`dist/scripts/mcp-bridge-auto.jsx`、内置 `DOVER-Mobile` 视频评分模型、内置 `MMS/CTC` 字幕强制对齐模型、内置 `ffmpeg.exe` 解码器以及一键安装脚本 `install-bridge.bat` 和专门的安装说明 `INSTALL_GUIDE.md`）。
+2. 解压到固定目录（例如 `D:\after-effects-mcp`），双击运行 **`install-bridge.bat`**（自动完成依赖校验、清理 AE 主菜单残留备份并安装 `mcp-bridge-auto.jsx`）。
+3. 如需手动安装面板脚本，也可直接将 `dist/scripts/mcp-bridge-auto.jsx`（或单独下载 `mcp-bridge-panel-v1.1.0.jsx.zip`）复制到您的 After Effects 安装目录下的 `ScriptUI Panels` 文件夹中：
    - **Windows 默认路径**：
      `C:\Program Files\Adobe\Adobe After Effects <版本>\Support Files\Scripts\ScriptUI Panels\`
      *(例如：`D:\AE2026\Adobe After Effects 2025\Support Files\Scripts\ScriptUI Panels\`)*
@@ -116,6 +116,12 @@ npm run install-bridge
 | `applyEffect` / `setEffectProperties` | 添加与修改内置或第三方插件（Glow、Trapcode、Sapphire、Element 3D 等） |
 | `exportFrame` | 截取合成指定时刻的完整画面并生成 PNG 截图快照 |
 | `exportPreviewVideo` | 快速导出指定帧区间的低清预览视频 |
+| `analyzeAudioRhythm` | **【v1.1 新增】** 提取音频精确 BPM、4/4 小节重拍、多频段鼓点 (Kick/Snare/Hi-Hat)、能量包络及前奏/铺垫/高潮爆发分段 |
+| `applyBeatMarkersToComp` | **【v1.1 新增】** 自动在 AE 合成或图层时间线上注入重拍、鼓点与强冲击标记点 |
+| `alignLyricsWithMMS` | **【v1.1 新增】** 基于内置 MMS-Align / CTC-Segmentation 声学模型与 Silero VAD v6，精准计算歌词每个词/字的起止毫秒时间与鼓点偏差 |
+| `createAlignedLyricLayers` | **【v1.1 新增】** 根据 MMS/CTC 声学对齐结果一键在 AE 合成中生成精准卡点的 3D 动态字幕图层 |
+| `evaluateVideoWithDOVER` | **【v1.1 新增】** 调用内置官方 **DOVER-Mobile (ConvNeXtV2-Femto-3D)** 模型对渲染视频进行技术质量、美学质量及音画同步率打分（0-100分）并给出修改建议 |
+| `cleanBridgeBackups` | **【v1.1 新增】** 自动扫描并清理 AE 主菜单与 `ScriptUI Panels` 中的残留备份文件，防止主菜单堆积 |
 | `rollback` | 撤销上一步操作并安全恢复工程 |
 
 ---
