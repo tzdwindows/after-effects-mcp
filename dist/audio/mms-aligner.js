@@ -593,20 +593,31 @@ export async function alignLyricsWithMMS(audioPath, options = {}) {
     const alignedLines = [];
     let totalWords = 0;
     let totalConfSum = 0;
+    // Helper to segment both space-delimited Latin lyrics and unspaced CJK (Chinese/Japanese/Korean) lyrics
+    const splitLyricLineIntoWords = (rawText) => {
+        const trimmed = rawText.trim();
+        if (!trimmed)
+            return [];
+        const tokens = trimmed.match(/[\u4e00-\u9fff]|[\u3040-\u30ff]+|[a-zA-Z0-9']+|[^\s\u4e00-\u9fff\u3040-\u30ffa-zA-Z0-9']+/g);
+        if (!tokens || tokens.length === 0) {
+            return trimmed.split(/\s+/).filter(Boolean);
+        }
+        return tokens.map((t) => t.trim()).filter(Boolean);
+    };
     for (let i = 0; i < inputLines.length; i++) {
         const lineObj = inputLines[i];
-        const words = lineObj.text
-            .trim()
-            .split(/\s+/)
-            .filter(Boolean);
+        const words = splitLyricLineIntoWords(lineObj.text);
         if (words.length === 0)
             continue;
         const wordTokenIds = words.map((w) => tokenizeWordToIds(w, vocab));
         const absHintStart = lineObj.startTimeHint ?? sliceStartSec + (i * sliceDurationSec) / inputLines.length;
-        const absHintEnd = lineObj.endTimeHint ??
+        const rawHintEnd = lineObj.endTimeHint ??
             (i + 1 < inputLines.length && inputLines[i + 1].startTimeHint !== undefined
                 ? inputLines[i + 1].startTimeHint
                 : Math.min(sliceEndSec, absHintStart + 3.5));
+        // Cap excessive interlude/instrumental gaps so a single vocal phrase doesn't stretch across 6+ seconds of silence
+        const maxPhraseSpan = Math.max(2.2, words.length * 0.58);
+        const absHintEnd = Math.min(rawHintEnd, absHintStart + maxPhraseSpan);
         const prevLineEndAbs = alignedLines.length > 0 ? alignedLines[alignedLines.length - 1].endTime : sliceStartSec;
         const absWinStart = Math.max(prevLineEndAbs, absHintStart - Math.min(0.18, anchorMargin * 0.5));
         const absWinEnd = Math.min(sliceEndSec, Math.max(absWinStart + 0.25, absHintEnd + Math.min(0.12, anchorMargin * 0.3)));

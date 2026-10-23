@@ -1346,7 +1346,18 @@ export function scriptGetInstalledPlugins(params) {
       { name: "Checkbox Control", matchName: "ADBE Checkbox Control", category: "Expression Controls" },
       { name: "Fill", matchName: "ADBE Fill", category: "Generate" },
       { name: "Gradient Ramp", matchName: "ADBE Ramp", category: "Generate" },
-      { name: "Fractal Noise", matchName: "ADBE Fractal Noise", category: "Noise & Grain" }
+      { name: "Fractal Noise", matchName: "ADBE Fractal Noise", category: "Noise & Grain" },
+      { name: "Grow Bounds", matchName: "ADBE Grow Bounds", category: "Utility" },
+      { name: "Glow", matchName: "ADBE Glow2", category: "Stylize" },
+      { name: "Video Copilot Saber", matchName: "VIDEOCOPILOT LightSaber", category: "Video Copilot" },
+      { name: "CC Particle World", matchName: "CC Particle World", category: "Simulation" },
+      { name: "Pixel Encoder / PESS2", matchName: "PESS2", category: "Stylize" },
+      { name: "RGB Separation / GUTS SEPRGB", matchName: "GUTS SEPRGB", category: "Channel" },
+      { name: "CS Vignette", matchName: "CS Vignette", category: "Stylize" },
+      { name: "CS Snowfall", matchName: "CSSnowfall", category: "Simulation" },
+      { name: "CS Rainfall", matchName: "CSRainfall", category: "Simulation" },
+      { name: "Radio Waves", matchName: "APC Radio Waves", category: "Generate" },
+      { name: "Vegas", matchName: "APC Vegas", category: "Generate" }
     ];
 
     // Check if test layer can accept effects
@@ -2955,6 +2966,454 @@ export function scriptAddTextAnimator(params) {
       preset: preset,
       startTime: sTime,
       endTime: eTime
+    };
+  })()`;
+}
+export function scriptCreateArticulatedCharacterRig(params) {
+    return `(function() {
+    ${ExtendScriptHelpers}
+    var comp = __findComp(${JSON.stringify(params.compName)});
+    var isGirl = ${JSON.stringify(params.gender)} === "girl";
+    var faceSign = ${JSON.stringify(params.facing || (params.gender === "girl" ? "left" : "right"))} === "right" ? 1 : -1;
+    var s = ${params.scale !== undefined ? params.scale : 1.0};
+    var inPt = ${params.inPoint !== undefined ? params.inPoint : 0};
+    var outPt = ${params.outPoint !== undefined ? params.outPoint : "comp.duration"};
+    var pos = ${JSON.stringify(params.position || [960, 540, 0])};
+    var fillCol = ${JSON.stringify(params.fillColor || (params.gender === "girl" ? [0.16, 0.08, 0.14] : [0.08, 0.12, 0.22]))};
+    var rimCol = ${JSON.stringify(params.rimColor || (params.gender === "girl" ? [1.0, 0.65, 0.78] : [0.45, 0.80, 1.0]))};
+    var heartCol = ${JSON.stringify(params.heartColor || [1.0, 0.25, 0.42])};
+    var posePreset = ${JSON.stringify(params.posePreset || "reach_gently")};
+    var customPoseKeys = ${JSON.stringify(params.poseKeyframes || [])};
+
+    var sh = comp.layers.addShape();
+    sh.name = ${JSON.stringify(params.name || (params.gender === "girl" ? "CHAR_Articulated_Girl" : "CHAR_Articulated_Boy"))};
+    sh.threeDLayer = true;
+    sh.inPoint = inPt;
+    sh.outPoint = outPt;
+    sh.property("Position").setValue(pos);
+
+    var root = sh.property("ADBE Root Vectors Group");
+    var bodyMaster = root.addProperty("ADBE Vector Group");
+    bodyMaster.name = "BodySilhouette";
+    var bmContents = bodyMaster.property("ADBE Vectors Group");
+
+    function addJointPart(parentVec, partName, anchor, posVal, verts, inT, outT) {
+      var grp = parentVec.addProperty("ADBE Vector Group");
+      grp.name = partName;
+      var gc = grp.property("ADBE Vectors Group");
+      var pg = gc.addProperty("ADBE Vector Shape - Group");
+      var sp = new Shape();
+      sp.vertices = verts;
+      if (inT) sp.inTangents = inT;
+      if (outT) sp.outTangents = outT;
+      sp.closed = true;
+      pg.property("ADBE Vector Shape").setValue(sp);
+      var xf = grp.property("ADBE Vector Transform Group");
+      xf.property("ADBE Vector Anchor").setValue(anchor);
+      xf.property("ADBE Vector Position").setValue(posVal);
+      return grp;
+    }
+
+    if (isGirl) {
+      addJointPart(bmContents, "HeadProfile", [0, -82 * s], [0, -82 * s],
+        [[0, -138 * s], [19 * s * faceSign, -124 * s], [25 * s * faceSign, -108 * s], [18 * s * faceSign, -95 * s], [7 * s * faceSign, -76 * s], [-14 * s * faceSign, -76 * s], [-24 * s * faceSign, -105 * s]],
+        [[-10 * s * faceSign, 0], [0, -8 * s], [0, -3 * s], [3 * s * faceSign, -3 * s], [0, 0], [0, 0], [0, 14 * s]],
+        [[12 * s * faceSign, 0], [0, 6 * s], [0, 3 * s], [-2 * s * faceSign, 5 * s], [0, 0], [0, 0], [0, -14 * s]]
+      );
+      addJointPart(bmContents, "HairRibbon", [-12 * s * faceSign, -110 * s], [-12 * s * faceSign, -110 * s],
+        [[-10 * s * faceSign, -116 * s], [-48 * s * faceSign, -86 * s], [-96 * s * faceSign, -38 * s], [-78 * s * faceSign, -26 * s], [-36 * s * faceSign, -64 * s], [-6 * s * faceSign, -94 * s]],
+        [[0, 0], [12 * s * faceSign, -10 * s], [16 * s * faceSign, -6 * s], [0, 0], [-14 * s * faceSign, 10 * s], [0, 0]],
+        [[0, 0], [-14 * s * faceSign, 10 * s], [0, 0], [14 * s * faceSign, -8 * s], [10 * s * faceSign, -10 * s], [0, 0]]
+      );
+      addJointPart(bmContents, "Torso", [0, 18 * s], [0, 18 * s],
+        [[11 * s * faceSign, -80 * s], [24 * s * faceSign, -48 * s], [17 * s * faceSign, -8 * s], [54 * s * faceSign, 66 * s], [-50 * s * faceSign, 66 * s], [-20 * s * faceSign, -8 * s], [-24 * s * faceSign, -52 * s], [-12 * s * faceSign, -80 * s]],
+        [[0, 0], [0, -10 * s], [0, -10 * s], [-12 * s * faceSign, 0], [12 * s * faceSign, 0], [0, 10 * s], [0, 10 * s], [0, 0]],
+        [[0, 0], [0, 10 * s], [8 * s * faceSign, 16 * s], [0, 0], [0, 0], [0, -10 * s], [0, -10 * s], [0, 0]]
+      );
+    } else {
+      addJointPart(bmContents, "HeadProfile", [0, -84 * s], [0, -84 * s],
+        [[-6 * s * faceSign, -142 * s], [12 * s * faceSign, -145 * s], [24 * s * faceSign, -135 * s], [21 * s * faceSign, -124 * s], [27 * s * faceSign, -110 * s], [21 * s * faceSign, -95 * s], [11 * s * faceSign, -74 * s], [-16 * s * faceSign, -74 * s], [-25 * s * faceSign, -104 * s], [-23 * s * faceSign, -128 * s]],
+        [[0, 0], [-5 * s * faceSign, 0], [0, 0], [0, 0], [0, -2 * s], [0, 0], [0, 0], [0, 0], [0, 10 * s], [0, 0]],
+        [[0, 0], [5 * s * faceSign, 0], [0, 0], [0, 0], [0, 2 * s], [0, 0], [0, 0], [0, 0], [0, -10 * s], [0, 0]]
+      );
+      addJointPart(bmContents, "HairRibbon", [14 * s * faceSign, -76 * s], [14 * s * faceSign, -76 * s],
+        [[10 * s * faceSign, -78 * s], [20 * s * faceSign, -78 * s], [30 * s * faceSign, -36 * s], [22 * s * faceSign, -24 * s], [13 * s * faceSign, -36 * s]],
+        null, null
+      );
+      addJointPart(bmContents, "Torso", [0, 18 * s], [0, 18 * s],
+        [[-16 * s * faceSign, -80 * s], [15 * s * faceSign, -80 * s], [31 * s * faceSign, -62 * s], [24 * s * faceSign, -8 * s], [25 * s * faceSign, 36 * s], [-25 * s * faceSign, 36 * s], [-24 * s * faceSign, -8 * s], [-33 * s * faceSign, -62 * s]],
+        null, null
+      );
+    }
+
+    addJointPart(bmContents, "FrontArm", [6 * s * faceSign, -64 * s], [6 * s * faceSign, -64 * s],
+      [[0, -72 * s], [42 * s * faceSign, -56 * s], [94 * s * faceSign, -52 * s], [94 * s * faceSign, -38 * s], [40 * s * faceSign, -40 * s], [-6 * s * faceSign, -54 * s]],
+      null, null
+    );
+    addJointPart(bmContents, "BackArm", [-6 * s * faceSign, -62 * s], [-6 * s * faceSign, -62 * s],
+      [[-10 * s * faceSign, -68 * s], [24 * s * faceSign, -46 * s], [64 * s * faceSign, -34 * s], [60 * s * faceSign, -22 * s], [18 * s * faceSign, -32 * s], [-16 * s * faceSign, -54 * s]],
+      null, null
+    );
+
+    var legW = isGirl ? 9 * s : 13.5 * s;
+    addJointPart(bmContents, "FrontLeg", [8 * s * faceSign, 24 * s], [8 * s * faceSign, 24 * s],
+      [[(8 - legW) * s * faceSign, 16 * s], [(8 + legW) * s * faceSign, 16 * s], [(12 + legW * 0.85) * s * faceSign, 132 * s], [(12 - legW * 0.85) * s * faceSign, 132 * s]],
+      null, null
+    );
+    addJointPart(bmContents, "BackLeg", [-8 * s * faceSign, 24 * s], [-8 * s * faceSign, 24 * s],
+      [[(-8 - legW) * s * faceSign, 16 * s], [(-8 + legW) * s * faceSign, 16 * s], [(-12 + legW * 0.85) * s * faceSign, 132 * s], [(-12 - legW * 0.85) * s * faceSign, 132 * s]],
+      null, null
+    );
+
+    // CRITICAL FIX: Merge Paths Type 2 = Add (Boolean Union) so internal joint overlaps disappear cleanly
+    var mergeOp = bmContents.addProperty("ADBE Vector Filter - Merge");
+    mergeOp.property("ADBE Vector Merge Type").setValue(2);
+
+    var st = bmContents.addProperty("ADBE Vector Graphic - Stroke");
+    st.property("ADBE Vector Stroke Color").setValue(rimCol);
+    st.property("ADBE Vector Stroke Width").setValue(4.2);
+
+    var fl = bmContents.addProperty("ADBE Vector Graphic - Fill");
+    fl.property("ADBE Vector Fill Color").setValue(fillCol);
+    fl.property("ADBE Vector Fill Opacity").setValue(96);
+
+    // Pulsing Heart Ember
+    var heartGrp = root.addProperty("ADBE Vector Group");
+    heartGrp.name = "HeartEmber";
+    var hc = heartGrp.property("ADBE Vectors Group");
+    var hEl = hc.addProperty("ADBE Vector Shape - Ellipse");
+    hEl.property("ADBE Vector Ellipse Size").setValue([24 * s, 24 * s]);
+    var hFl = hc.addProperty("ADBE Vector Graphic - Fill");
+    hFl.property("ADBE Vector Fill Color").setValue(heartCol);
+    hFl.property("ADBE Vector Fill Opacity").expression = "78 + 22 * Math.sin(time * 5.2);";
+    heartGrp.property("ADBE Vector Transform Group").property("ADBE Vector Anchor").setValue([8 * s * faceSign, -40 * s]);
+    heartGrp.property("ADBE Vector Transform Group").property("ADBE Vector Position").setValue([8 * s * faceSign, -40 * s]);
+    heartGrp.property("ADBE Vector Transform Group").property("ADBE Vector Scale").expression = "var p = 100 + 26 * Math.sin(time * 5.2); [p, p];";
+
+    // Unclipped Glow (Grow Bounds BEFORE Glow2)
+    var fx = sh.property("ADBE Effect Parade");
+    var gb = fx.addProperty("ADBE Grow Bounds");
+    gb.property("ADBE Grow Bounds-0001").setValue(300);
+    var gl = fx.addProperty("ADBE Glow2");
+    gl.property("ADBE Glow2-0001").setValue(2);
+    gl.property("ADBE Glow2-0002").setValue(45);
+    gl.property("ADBE Glow2-0003").setValue(75);
+    gl.property("ADBE Glow2-0004").setValue(1.3);
+
+    // CRITICAL FIX: Lock upper-body joints trigonometrically to Torso waist hinge [0, 18*s] so parts NEVER separate
+    function bindUpperJointToTorso(grpName, restX, restY, rotExpr) {
+      var targetGrp = grpName === "HeartEmber"
+        ? sh.property("ADBE Root Vectors Group").property("HeartEmber")
+        : sh.property("ADBE Root Vectors Group").property("BodySilhouette").property("ADBE Vectors Group").property(grpName);
+      var xf = targetGrp.property("ADBE Vector Transform Group");
+      var wy = (18 * s).toFixed(2);
+      var dx = (restX).toFixed(2);
+      var dy = (restY - 18 * s).toFixed(2);
+      xf.property("ADBE Vector Position").expression =
+        'var tRot = content("BodySilhouette").content("Torso").transform.rotation;\\n' +
+        'var a = degreesToRadians(tRot);\\n' +
+        'var dx = ' + dx + '; var dy = ' + dy + '; var wy = ' + wy + ';\\n' +
+        '[dx * Math.cos(a) - dy * Math.sin(a), wy + dx * Math.sin(a) + dy * Math.cos(a)];';
+      xf.property("ADBE Vector Rotation").expression =
+        'content("BodySilhouette").content("Torso").transform.rotation + (' + rotExpr + ');';
+    }
+
+    function setLowerJointExpr(grpName, rotExpr) {
+      var targetGrp = sh.property("ADBE Root Vectors Group").property("BodySilhouette").property("ADBE Vectors Group").property(grpName);
+      targetGrp.property("ADBE Vector Transform Group").property("ADBE Vector Rotation").expression = rotExpr;
+    }
+
+    var fs = faceSign;
+    var headRestY = isGirl ? (-82 * s) : (-84 * s);
+    var hairRestX = isGirl ? (-12 * s * fs) : (14 * s * fs);
+    var hairRestY = isGirl ? (-110 * s) : (-76 * s);
+
+    if (customPoseKeys && customPoseKeys.length > 0) {
+      var torsoRotProp = sh.property("ADBE Root Vectors Group").property("BodySilhouette").property("ADBE Vectors Group").property("Torso").property("ADBE Vector Transform Group").property("ADBE Vector Rotation");
+      for (var k = 0; k < customPoseKeys.length; k++) {
+        var pk = customPoseKeys[k];
+        if (pk.torsoLeanDeg !== undefined) torsoRotProp.setValueAtTime(pk.time, pk.torsoLeanDeg * fs);
+      }
+      bindUpperJointToTorso("HeadProfile", 0, headRestY, (4 * fs) + " * Math.sin(time * 2.1)");
+      bindUpperJointToTorso("FrontArm", 6 * s * fs, -64 * s, (-25 * fs) + " + 14 * Math.sin(time * 2.4)");
+      bindUpperJointToTorso("BackArm", -6 * s * fs, -62 * s, (-10 * fs) + " + 10 * Math.cos(time * 2.0)");
+      bindUpperJointToTorso("HairRibbon", hairRestX, hairRestY, (isGirl ? 12 : 8) + " * Math.sin(time * 3.8)");
+      bindUpperJointToTorso("HeartEmber", 8 * s * fs, -40 * s, "0");
+    } else if (posePreset === "embrace_close") {
+      setLowerJointExpr("Torso", (9 * fs) + " + 2.5 * Math.sin(time * 1.8)");
+      bindUpperJointToTorso("HeadProfile", 0, headRestY, (isGirl ? -8 * fs : 10 * fs) + " + 3 * Math.sin(time * 1.6)");
+      bindUpperJointToTorso("FrontArm", 6 * s * fs, -64 * s, (-34 * fs) + " + 8 * Math.sin(time * 2.0)");
+      bindUpperJointToTorso("BackArm", -6 * s * fs, -62 * s, (-22 * fs) + " + 6 * Math.cos(time * 2.0)");
+      bindUpperJointToTorso("HairRibbon", hairRestX, hairRestY, "10 * Math.sin(time * 3.5)");
+      bindUpperJointToTorso("HeartEmber", 8 * s * fs, -40 * s, "0");
+    } else if (posePreset === "walk_with_camera") {
+      setLowerJointExpr("Torso", (6 * fs) + " + 3 * Math.sin(time * 4.4)");
+      bindUpperJointToTorso("HeadProfile", 0, headRestY, (3 * fs) + " + 4 * Math.sin(time * 2.2)");
+      bindUpperJointToTorso("FrontArm", 6 * s * fs, -64 * s, "24 * Math.sin(time * 4.4)");
+      bindUpperJointToTorso("BackArm", -6 * s * fs, -62 * s, "-24 * Math.sin(time * 4.4)");
+      setLowerJointExpr("FrontLeg", "-28 * Math.sin(time * 4.4)");
+      setLowerJointExpr("BackLeg", "28 * Math.sin(time * 4.4)");
+      bindUpperJointToTorso("HairRibbon", hairRestX, hairRestY, (12 * fs) + " + 12 * Math.sin(time * 6.0)");
+      bindUpperJointToTorso("HeartEmber", 8 * s * fs, -40 * s, "0");
+    } else if (posePreset === "recoil_grief") {
+      setLowerJointExpr("Torso", (-12 * fs) + " + 4 * Math.sin(time * 3.2)");
+      bindUpperJointToTorso("HeadProfile", 0, headRestY, (isGirl ? 18 * fs : -14 * fs) + " + 5 * Math.sin(time * 4.0)");
+      bindUpperJointToTorso("FrontArm", 6 * s * fs, -64 * s, (-62 * fs) + " + 10 * Math.sin(time * 5.0)");
+      bindUpperJointToTorso("BackArm", -6 * s * fs, -62 * s, (25 * fs) + " + 8 * Math.cos(time * 3.5)");
+      bindUpperJointToTorso("HairRibbon", hairRestX, hairRestY, "18 * Math.sin(time * 6.2)");
+      bindUpperJointToTorso("HeartEmber", 8 * s * fs, -40 * s, "0");
+    } else if (posePreset === "desperate_catch") {
+      setLowerJointExpr("Torso", (17 * fs) + " + 3 * Math.sin(time * 3.5)");
+      bindUpperJointToTorso("HeadProfile", 0, headRestY, (-6 * fs) + " + 4 * Math.sin(time * 4.0)");
+      bindUpperJointToTorso("FrontArm", 6 * s * fs, -64 * s, (-38 * fs) + " + 14 * Math.sin(time * 6.0)");
+      bindUpperJointToTorso("BackArm", -6 * s * fs, -62 * s, (-16 * fs) + " + 10 * Math.cos(time * 5.0)");
+      setLowerJointExpr("FrontLeg", (-16 * fs) + "");
+      setLowerJointExpr("BackLeg", (20 * fs) + "");
+      bindUpperJointToTorso("HairRibbon", hairRestX, hairRestY, (14 * fs) + " + 16 * Math.sin(time * 8.0)");
+      bindUpperJointToTorso("HeartEmber", 8 * s * fs, -40 * s, "0");
+    } else if (posePreset === "kneel_weeping") {
+      setLowerJointExpr("Torso", (18 * fs) + " + 3 * Math.sin(time * 2.5)");
+      bindUpperJointToTorso("HeadProfile", 0, headRestY, (20 * fs) + " + 5 * Math.sin(time * 3.2)");
+      bindUpperJointToTorso("FrontArm", 6 * s * fs, -64 * s, (-66 * fs) + " + 6 * Math.sin(time * 4.0)");
+      bindUpperJointToTorso("BackArm", -6 * s * fs, -62 * s, (-48 * fs) + " + 6 * Math.cos(time * 4.0)");
+      setLowerJointExpr("FrontLeg", (32 * fs) + "");
+      setLowerJointExpr("BackLeg", (45 * fs) + "");
+      bindUpperJointToTorso("HairRibbon", hairRestX, hairRestY, "8 * Math.sin(time * 3.0)");
+      bindUpperJointToTorso("HeartEmber", 8 * s * fs, -40 * s, "0");
+    } else if (posePreset === "turn_away_cold") {
+      setLowerJointExpr("Torso", (-8 * fs) + " + 2 * Math.sin(time * 1.5)");
+      bindUpperJointToTorso("HeadProfile", 0, headRestY, (16 * fs) + " + 3 * Math.sin(time * 1.5)");
+      bindUpperJointToTorso("FrontArm", 6 * s * fs, -64 * s, (42 * fs) + " + 5 * Math.sin(time * 1.8)");
+      bindUpperJointToTorso("BackArm", -6 * s * fs, -62 * s, (50 * fs) + " + 4 * Math.cos(time * 1.8)");
+      bindUpperJointToTorso("HairRibbon", hairRestX, hairRestY, "10 * Math.sin(time * 2.8)");
+      bindUpperJointToTorso("HeartEmber", 8 * s * fs, -40 * s, "0");
+    } else {
+      // reach_gently default
+      setLowerJointExpr("Torso", (7 * fs) + " + 3.5 * Math.sin(time * 2.0)");
+      bindUpperJointToTorso("HeadProfile", 0, headRestY, (-5 * fs) + " + 4 * Math.sin(time * 1.7)");
+      bindUpperJointToTorso("FrontArm", 6 * s * fs, -64 * s, (-24 * fs) + " + 14 * Math.sin(time * 2.3)");
+      bindUpperJointToTorso("BackArm", -6 * s * fs, -62 * s, (12 * fs) + " + 8 * Math.cos(time * 1.9)");
+      setLowerJointExpr("FrontLeg", (-6 * fs) + " + 4 * Math.sin(time * 1.8)");
+      setLowerJointExpr("BackLeg", (8 * fs) + " - 4 * Math.sin(time * 1.8)");
+      bindUpperJointToTorso("HairRibbon", hairRestX, hairRestY, "14 * Math.sin(time * 3.8)");
+      bindUpperJointToTorso("HeartEmber", 8 * s * fs, -40 * s, "0");
+    }
+
+    return {
+      layerIndex: sh.index,
+      layerName: sh.name,
+      gender: isGirl ? "girl" : "boy",
+      posePreset: posePreset,
+      mergeMode: "Boolean Add (Type 2)",
+      spineLocked: true
+    };
+  })()`;
+}
+export function scriptCreate3DSaberSymbolOrPortal(params) {
+    return `(function() {
+    ${ExtendScriptHelpers}
+    var comp = __findComp(${JSON.stringify(params.compName)});
+    var symType = ${JSON.stringify(params.symbolType)};
+    var inPt = ${params.inPoint !== undefined ? params.inPoint : 0};
+    var outPt = ${params.outPoint !== undefined ? params.outPoint : "comp.duration"};
+    var pos = ${JSON.stringify(params.position || [960, 540, 0])};
+    var endPos = ${JSON.stringify(params.endPosition || null)};
+    var col = ${JSON.stringify(params.color || [0.35, 0.85, 1.0])};
+    var coreSz = ${params.coreSize !== undefined ? params.coreSize : 4.2};
+    var glowSp = ${params.glowSpread !== undefined ? params.glowSpread : 0.40};
+    var glowIn = ${params.glowIntensity !== undefined ? params.glowIntensity : 48};
+
+    // CRITICAL FIX: 3840x3840 canvas prevents 3D Saber glow from clipping against layer edges
+    var W = 3840;
+    var H = 3840;
+    var cx = 1920;
+    var cy = 1920;
+
+    var solid = comp.layers.addSolid([0, 0, 0], ${JSON.stringify(params.name || "SYM_3D_Saber")}, W, H, 1.0, comp.duration);
+    solid.threeDLayer = true;
+    solid.blendingMode = BlendingMode.ADD;
+    solid.inPoint = inPt;
+    solid.outPoint = outPt;
+    solid.property("Anchor Point").setValue([cx, cy, 0]);
+    if (endPos) {
+      solid.property("Position").setValueAtTime(inPt, pos);
+      solid.property("Position").setValueAtTime(outPt, endPos);
+    } else {
+      solid.property("Position").setValue(pos);
+    }
+
+    var masks = solid.property("ADBE Mask Parade");
+    var m = masks.addProperty("ADBE Mask Atom");
+    m.maskMode = MaskMode.NONE;
+    var sp = new Shape();
+
+    if (symType === "heart") {
+      sp.vertices = [[cx, cy - 110], [cx + 210, cy - 220], [cx + 310, cy - 20], [cx, cy + 260], [cx - 310, cy - 20], [cx - 210, cy - 220]];
+      sp.inTangents = [[-45, -75], [-95, 0], [0, -135], [125, -75], [0, 135], [-95, 0]];
+      sp.outTangents = [[45, -75], [95, 0], [0, 135], [-125, -75], [0, -135], [95, 0]];
+      sp.closed = true;
+    } else if (symType === "infinity") {
+      sp.vertices = [[cx, cy], [cx + 340, cy - 175], [cx + 340, cy + 175], [cx, cy], [cx - 340, cy - 175], [cx - 340, cy + 175]];
+      sp.inTangents = [[-130, 130], [-145, 0], [145, 0], [130, 130], [145, 0], [-145, 0]];
+      sp.outTangents = [[130, -130], [145, 0], [-145, 0], [-130, -130], [-145, 0], [145, 0]];
+      sp.closed = true;
+    } else if (symType === "teardrop_portal") {
+      var r = 135;
+      sp.vertices = [[cx, cy - r * 1.75], [cx + r, cy + r * 0.25], [cx, cy + r * 1.25], [cx - r, cy + r * 0.25]];
+      sp.inTangents = [[-r * 0.16, r * 0.45], [0, -r * 0.65], [r * 0.65, 0], [0, r * 0.65]];
+      sp.outTangents = [[r * 0.16, r * 0.45], [0, r * 0.65], [-r * 0.65, 0], [0, -r * 0.65]];
+      sp.closed = true;
+    } else if (symType === "fracture_wall") {
+      sp.vertices = [[cx - 12, cy - 420], [cx + 55, cy - 210], [cx - 68, cy - 40], [cx + 72, cy + 150], [cx - 42, cy + 310], [cx + 18, cy + 440]];
+      sp.closed = false;
+    } else {
+      // clock_ring
+      var R = 360;
+      var k = R * 0.55228475;
+      sp.vertices = [[cx, cy - R], [cx + R, cy], [cx, cy + R], [cx - R, cy]];
+      sp.inTangents = [[-k, 0], [0, -k], [k, 0], [0, k]];
+      sp.outTangents = [[k, 0], [0, k], [-k, 0], [0, -k]];
+      sp.closed = true;
+    }
+    m.property("ADBE Mask Shape").setValue(sp);
+
+    var fx = solid.property("ADBE Effect Parade");
+    var usedSaber = false;
+    try {
+      var sb = fx.addProperty("VIDEOCOPILOT LightSaber");
+      sb.property("VIDEOCOPILOT LightSaber-0002").setValue(col);
+      sb.property("VIDEOCOPILOT LightSaber-0003").setValue(coreSz);
+      sb.property("VIDEOCOPILOT LightSaber-0004").setValue(glowSp);
+      sb.property("VIDEOCOPILOT LightSaber-0006").setValue(glowIn);
+      sb.property("VIDEOCOPILOT LightSaber-0009").setValue(2); // Layer Masks
+      sb.property("VIDEOCOPILOT LightSaber-0136").setValue(2); // Transparent composite
+      usedSaber = true;
+    } catch (e) {
+      var st = fx.addProperty("ADBE Stroke");
+      st.property("ADBE Stroke-0002").setValue(col);
+      st.property("ADBE Stroke-0003").setValue(coreSz * 2);
+      st.property("ADBE Stroke-0007").setValue(2);
+    }
+
+    var childLayers = [];
+    if (symType === "teardrop_portal" && ${Boolean(params.createInnerWorldForTeardrop)}) {
+      // Create inner infinity world parented to the teardrop with Scale reset to [100,100,100]
+      var innerInf = comp.layers.addSolid([0, 0, 0], solid.name + "_InnerWorld", W, H, 1.0, comp.duration);
+      innerInf.threeDLayer = true;
+      innerInf.blendingMode = BlendingMode.ADD;
+      innerInf.inPoint = inPt;
+      innerInf.outPoint = outPt;
+      innerInf.property("Anchor Point").setValue([cx, cy, 0]);
+      innerInf.parent = solid;
+      // CRITICAL FIX: Reset Scale after parenting so AE does not shrink child by 1/parentScale
+      innerInf.property("Position").setValue([cx, cy + 15, -2]);
+      innerInf.property("Scale").setValue([100, 100, 100]);
+
+      var im = innerInf.property("ADBE Mask Parade").addProperty("ADBE Mask Atom");
+      im.maskMode = MaskMode.NONE;
+      var isp = new Shape();
+      isp.vertices = [[cx, cy], [cx + 85, cy - 44], [cx + 85, cy + 44], [cx, cy], [cx - 85, cy - 44], [cx - 85, cy + 44]];
+      isp.inTangents = [[-32, 32], [-36, 0], [36, 0], [32, 32], [36, 0], [-36, 0]];
+      isp.outTangents = [[32, -32], [36, 0], [-36, 0], [-32, -32], [-36, 0], [36, 0]];
+      isp.closed = true;
+      im.property("ADBE Mask Shape").setValue(isp);
+      try {
+        var isb = innerInf.property("ADBE Effect Parade").addProperty("VIDEOCOPILOT LightSaber");
+        isb.property("VIDEOCOPILOT LightSaber-0002").setValue([1.0, 0.72, 0.30]);
+        isb.property("VIDEOCOPILOT LightSaber-0003").setValue(2.6);
+        isb.property("VIDEOCOPILOT LightSaber-0004").setValue(0.32);
+        isb.property("VIDEOCOPILOT LightSaber-0006").setValue(42);
+        isb.property("VIDEOCOPILOT LightSaber-0009").setValue(2);
+        isb.property("VIDEOCOPILOT LightSaber-0136").setValue(2);
+      } catch(e){}
+      childLayers.push(innerInf.name);
+    }
+
+    return {
+      layerIndex: solid.index,
+      layerName: solid.name,
+      symbolType: symType,
+      canvasSize: [W, H],
+      usedSaber: usedSaber,
+      childLayers: childLayers
+    };
+  })()`;
+}
+export function scriptFixLayerGlowAndBoundsClipping(params) {
+    return `(function() {
+    ${ExtendScriptHelpers}
+    var comp = __findComp(${JSON.stringify(params.compName)});
+    var growPx = ${params.growPixels !== undefined ? params.growPixels : 280};
+    var minSolidSz = ${params.expandSaberSolidsToSize !== undefined ? params.expandSaberSolidsToSize : 3840};
+    var fixedLayers = [];
+
+    function fixOneLayer(lyr) {
+      var fx = lyr.property("ADBE Effect Parade");
+      if (!fx || fx.numProperties === 0) return;
+
+      var hasGlow = false;
+      var hasGrowBounds = false;
+      var hasSaber = false;
+      for (var i = 1; i <= fx.numProperties; i++) {
+        var ef = fx.property(i);
+        if (ef.matchName === "ADBE Glow2" || ef.matchName === "ADBE Glo2") hasGlow = true;
+        if (ef.matchName === "ADBE Grow Bounds") hasGrowBounds = true;
+        if (ef.matchName === "VIDEOCOPILOT LightSaber") hasSaber = true;
+      }
+
+      if (hasGlow && !hasGrowBounds) {
+        try {
+          var gb = fx.addProperty("ADBE Grow Bounds");
+          gb.property("ADBE Grow Bounds-0001").setValue(growPx);
+          gb.moveTo(1);
+          fixedLayers.push({ layer: lyr.name, action: "Inserted ADBE Grow Bounds (" + growPx + "px) before Glow" });
+        } catch (e) {}
+      }
+
+      if (hasSaber && lyr.source && lyr.source.mainSource && (lyr.width < minSolidSz || lyr.height < minSolidSz)) {
+        try {
+          var oldCx = lyr.width / 2;
+          var oldCy = lyr.height / 2;
+          var newCx = minSolidSz / 2;
+          var newCy = minSolidSz / 2;
+          var dx = newCx - oldCx;
+          var dy = newCy - oldCy;
+          lyr.source.width = minSolidSz;
+          lyr.source.height = minSolidSz;
+          lyr.property("Anchor Point").setValue([newCx, newCy, 0]);
+          var masks = lyr.property("ADBE Mask Parade");
+          if (masks) {
+            for (var mIdx = 1; mIdx <= masks.numProperties; mIdx++) {
+              var mShapeProp = masks.property(mIdx).property("ADBE Mask Shape");
+              if (mShapeProp && mShapeProp.numKeys === 0) {
+                var shVal = mShapeProp.value;
+                var newVerts = [];
+                for (var v = 0; v < shVal.vertices.length; v++) {
+                  newVerts.push([shVal.vertices[v][0] + dx, shVal.vertices[v][1] + dy]);
+                }
+                shVal.vertices = newVerts;
+                mShapeProp.setValue(shVal);
+              }
+            }
+          }
+          fixedLayers.push({ layer: lyr.name, action: "Expanded Saber solid to " + minSolidSz + "x" + minSolidSz + " and recentered masks" });
+        } catch (e) {}
+      }
+    }
+
+    if (${params.layerIndex !== undefined || params.layerName !== undefined ? "true" : "false"}) {
+      var targetLyr = __findLayer(comp, ${JSON.stringify(params.layerIndex !== undefined ? params.layerIndex : params.layerName)});
+      fixOneLayer(targetLyr);
+    } else {
+      for (var l = 1; l <= comp.numLayers; l++) {
+        fixOneLayer(comp.layer(l));
+      }
+    }
+
+    return {
+      compName: comp.name,
+      fixedCount: fixedLayers.length,
+      fixedLayers: fixedLayers
     };
   })()`;
 }

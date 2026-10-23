@@ -1,7 +1,7 @@
 {
   "name": "after-effects-mcp",
-  "version": "1.1.0",
-  "description": "Comprehensive Model Context Protocol (MCP) server for Adobe After Effects with Audio Beat Sync, MMS/CTC Forced Lyric Alignment, and Bundled DOVER-Mobile Video Quality Assessment",
+  "version": "1.2.0",
+  "description": "Comprehensive Model Context Protocol (MCP) server for Adobe After Effects with MusiCNN Emotion Tagging, AudioLyricPoseNet Articulated Kinematics, FastSal-NIMA Aesthetic Inspection, MMS/CTC Lyric Alignment, and DOVER-Mobile Video Scoring",
   "type": "module",
   "main": "dist/index.js",
   "bin": {

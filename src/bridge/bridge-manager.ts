@@ -53,7 +53,7 @@ export class BridgeManager {
       const raw = fs.readFileSync(this.heartbeatFile, 'utf-8');
       const info: HeartbeatInfo = JSON.parse(raw);
       const now = Date.now();
-      const diffSec = (now - info.timestamp) / 1000;
+      const diffSec = Math.abs(now - info.timestamp) / 1000;
       const isAlive = diffSec < 15; // Within 15 seconds
 
       return {
@@ -108,39 +108,39 @@ export class BridgeManager {
 
     while (Date.now() - startTime < timeout) {
       if (fs.existsSync(this.resFile)) {
+        let res: BridgeResult | null = null;
         try {
           const raw = fs.readFileSync(this.resFile, 'utf-8');
-          const res: BridgeResult = JSON.parse(raw);
-          if (res.id === commandId) {
-            this.lastExecutedResults.set(commandId, res);
-
-            // Record history
-            historyManager.record({
-              action,
-              description,
-              params,
-              snapshotFile: res.snapshotPath || (res.saved ? res.savedPath : undefined),
-              success: res.success,
-            });
-
-            if (!res.success) {
-              throw new Error(res.error || `Command ${action} failed in After Effects.`);
-            }
-
-            return {
-              success: true,
-              action,
-              data: res.data,
-              autoSaved: res.saved,
-              savedPath: res.savedPath,
-              snapshotPath: res.snapshotPath,
-            };
-          }
-        } catch (readErr: any) {
-          if (readErr.message.includes('failed in After Effects')) {
-            throw readErr;
-          }
+          res = JSON.parse(raw);
+        } catch {
           // File might be mid-write, retry next cycle
+          res = null;
+        }
+
+        if (res && res.id === commandId) {
+          this.lastExecutedResults.set(commandId, res);
+
+          // Record history
+          historyManager.record({
+            action,
+            description,
+            params,
+            snapshotFile: res.snapshotPath || (res.saved ? res.savedPath : undefined),
+            success: res.success,
+          });
+
+          if (!res.success) {
+            throw new Error(res.error || `Command ${action} failed in After Effects.`);
+          }
+
+          return {
+            success: true,
+            action,
+            data: res.data,
+            autoSaved: res.saved,
+            savedPath: res.savedPath,
+            snapshotPath: res.snapshotPath,
+          };
         }
       }
 

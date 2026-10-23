@@ -548,10 +548,11 @@
   var auxBtnRow = tabAux.add("group");
   auxBtnRow.orientation = "row";
   var btnBeatSync = auxBtnRow.add("button", undefined, "提取鼓点并打标");
+  var btnMusiCNN = auxBtnRow.add("button", undefined, "MusiCNN 情绪标签分析");
   var btnMMSAlign = auxBtnRow.add("button", undefined, "MMS-CTC 精准对齐字幕");
   var btnDoverScore = auxBtnRow.add("button", undefined, "DOVER-Mobile 视频打分");
 
-  var auxStatusBox = tabAux.add("edittext", undefined, "支持功能：\n1. 多频段鼓点/BPM节拍检测并自动注入AE时间线标记\n2. MMS-Align / CTC-Segmentation 声学强制对齐字幕\n3. 内置 DOVER-Mobile 神经网络视频质量与音画同步打分", { multiline: true, readonly: true });
+  var auxStatusBox = tabAux.add("edittext", undefined, "支持功能：\n1. 多频段鼓点/BPM节拍检测并自动注入AE时间线标记\n2. MusiCNN (Pons & Serra) 50维情绪标签、Russell Valence-Arousal连续张力轨迹与AudioLyricPoseNet双人角色姿态生成\n3. MMS-Align / CTC-Segmentation 声学强制对齐字幕\n4. 内置 DOVER-Mobile 神经网络视频质量与音画同步打分", { multiline: true, readonly: true });
   auxStatusBox.preferredSize = [-1, 105];
 
   btnBeatSync.onClick = function() {
@@ -564,6 +565,20 @@
       type: "analyze_audio_beats",
       timestamp: new Date().getTime(),
       audioPath: audPathEdit.text
+    }, null, 2));
+  };
+
+  btnMusiCNN.onClick = function() {
+    if (!audPathEdit.text) { alert("请先选择音频文件路径。"); return; }
+    auxStatusBox.text = "正在运行内置 MusiCNN (musicnn_mood_va.onnx) 与 AudioLyricPoseNet 提取音乐情绪标签、Valence-Arousal张力曲线与角色动作关键帧...";
+    var reqId = "aux-musicnn-" + new Date().getTime();
+    waitingForAIId = reqId;
+    writeFile(aiReqFile, JSON.stringify({
+      id: reqId,
+      type: "analyze_music_musicnn",
+      timestamp: new Date().getTime(),
+      audioPath: audPathEdit.text,
+      lrcPath: lrcPathEdit.text || undefined
     }, null, 2));
   };
 
@@ -687,7 +702,7 @@
         } else {
           aiStatusBox.text = "处理失败: " + (resp.error || "未知错误");
         }
-      } else if (resp.type === "analyze_audio_beats" || resp.type === "align_lyrics_mms") {
+      } else if (resp.type === "analyze_audio_beats" || resp.type === "align_lyrics_mms" || resp.type === "analyze_music_musicnn") {
         if (resp.success) {
           if (resp.script && app.project && app.project.activeItem && app.project.activeItem instanceof CompItem) {
             try {

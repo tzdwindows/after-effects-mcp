@@ -67,7 +67,8 @@ export interface AIRequest {
     | 'fetch_models'
     | 'analyze_audio_beats'
     | 'align_lyrics_mms'
-    | 'evaluate_video_dover';
+    | 'evaluate_video_dover'
+    | 'analyze_music_musicnn';
   timestamp: number;
   prompt?: string;
   layerInfo?: any;
@@ -90,7 +91,8 @@ export interface AIResponse {
     | 'fetch_models'
     | 'analyze_audio_beats'
     | 'align_lyrics_mms'
-    | 'evaluate_video_dover';
+    | 'evaluate_video_dover'
+    | 'analyze_music_musicnn';
   script?: string;
   explanation?: string;
   models?: string[];

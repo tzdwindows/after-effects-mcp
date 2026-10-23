@@ -41,7 +41,7 @@ export class BridgeManager {
             const raw = fs.readFileSync(this.heartbeatFile, 'utf-8');
             const info = JSON.parse(raw);
             const now = Date.now();
-            const diffSec = (now - info.timestamp) / 1000;
+            const diffSec = Math.abs(now - info.timestamp) / 1000;
             const isAlive = diffSec < 15; // Within 15 seconds
             return {
                 connected: isAlive,
@@ -84,37 +84,36 @@ export class BridgeManager {
         let fallbackAttempted = false;
         while (Date.now() - startTime < timeout) {
             if (fs.existsSync(this.resFile)) {
+                let res = null;
                 try {
                     const raw = fs.readFileSync(this.resFile, 'utf-8');
-                    const res = JSON.parse(raw);
-                    if (res.id === commandId) {
-                        this.lastExecutedResults.set(commandId, res);
-                        // Record history
-                        historyManager.record({
-                            action,
-                            description,
-                            params,
-                            snapshotFile: res.snapshotPath || (res.saved ? res.savedPath : undefined),
-                            success: res.success,
-                        });
-                        if (!res.success) {
-                            throw new Error(res.error || `Command ${action} failed in After Effects.`);
-                        }
-                        return {
-                            success: true,
-                            action,
-                            data: res.data,
-                            autoSaved: res.saved,
-                            savedPath: res.savedPath,
-                            snapshotPath: res.snapshotPath,
-                        };
-                    }
+                    res = JSON.parse(raw);
                 }
-                catch (readErr) {
-                    if (readErr.message.includes('failed in After Effects')) {
-                        throw readErr;
-                    }
+                catch {
                     // File might be mid-write, retry next cycle
+                    res = null;
+                }
+                if (res && res.id === commandId) {
+                    this.lastExecutedResults.set(commandId, res);
+                    // Record history
+                    historyManager.record({
+                        action,
+                        description,
+                        params,
+                        snapshotFile: res.snapshotPath || (res.saved ? res.savedPath : undefined),
+                        success: res.success,
+                    });
+                    if (!res.success) {
+                        throw new Error(res.error || `Command ${action} failed in After Effects.`);
+                    }
+                    return {
+                        success: true,
+                        action,
+                        data: res.data,
+                        autoSaved: res.saved,
+                        savedPath: res.savedPath,
+                        snapshotPath: res.snapshotPath,
+                    };
                 }
             }
             // Auto recovery: check if AE crashed or not connected

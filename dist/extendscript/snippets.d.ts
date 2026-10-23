@@ -504,3 +504,48 @@ export declare function scriptAddTextAnimator(params: {
         correlation?: number;
     };
 }): string;
+export declare function scriptCreateArticulatedCharacterRig(params: {
+    compName?: string;
+    name?: string;
+    gender: "boy" | "girl";
+    facing?: "left" | "right";
+    inPoint?: number;
+    outPoint?: number;
+    position?: [number, number, number];
+    scale?: number;
+    fillColor?: [number, number, number];
+    rimColor?: [number, number, number];
+    heartColor?: [number, number, number];
+    posePreset?: "reach_gently" | "embrace_close" | "walk_with_camera" | "recoil_grief" | "desperate_catch" | "kneel_weeping" | "turn_away_cold" | "custom";
+    poseKeyframes?: Array<{
+        time: number;
+        torsoLeanDeg?: number;
+        headTiltDeg?: number;
+        frontArmDeg?: number;
+        backArmDeg?: number;
+        frontLegDeg?: number;
+        backLegDeg?: number;
+        hairOrTieSwayDeg?: number;
+    }>;
+}): string;
+export declare function scriptCreate3DSaberSymbolOrPortal(params: {
+    compName?: string;
+    name?: string;
+    symbolType: "heart" | "infinity" | "teardrop_portal" | "clock_ring" | "fracture_wall";
+    inPoint?: number;
+    outPoint?: number;
+    position?: [number, number, number];
+    endPosition?: [number, number, number];
+    color?: [number, number, number];
+    coreSize?: number;
+    glowSpread?: number;
+    glowIntensity?: number;
+    createInnerWorldForTeardrop?: boolean;
+}): string;
+export declare function scriptFixLayerGlowAndBoundsClipping(params: {
+    compName?: string;
+    layerName?: string;
+    layerIndex?: number;
+    growPixels?: number;
+    expandSaberSolidsToSize?: number;
+}): string;

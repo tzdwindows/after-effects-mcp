@@ -121,6 +121,11 @@ npm run install-bridge
 | `alignLyricsWithMMS` | **【v1.1 新增】** 基于内置 MMS-Align / CTC-Segmentation 声学模型与 Silero VAD v6，精准计算歌词每个词/字的起止毫秒时间与鼓点偏差 |
 | `createAlignedLyricLayers` | **【v1.1 新增】** 根据 MMS/CTC 声学对齐结果一键在 AE 合成中生成精准卡点的 3D 动态字幕图层 |
 | `evaluateVideoWithDOVER` | **【v1.1 新增】** 调用内置官方 **DOVER-Mobile (ConvNeXtV2-Femto-3D)** 模型对渲染视频进行技术质量、美学质量及音画同步率打分（0-100分）并给出修改建议 |
+| `analyzeMusicEmotionWithMusiCNN` | **【v1.2 新增】** 基于内置 **MusiCNN (musicnn_mood_va.onnx)** 提取 50 维情绪/配器/结构标签、连续 Russell 情绪环（效价/唤醒度/张力）曲线，并结合 **AudioLyricPoseNet** 输出双人角色 7 自由度骨骼运动学姿态 |
+| `createArticulatedCharacterRig` | **【v1.2 新增】** 一键生成男/女 3D 关节剪影角色（男士短发收腰制服与领带 / 女士飘带百褶裙），具备腰部铰链三角函数锁骨绑定（俯仰零脱节）与布尔并集防内部断线 |
+| `create3DSaberSymbolOrPortal` | **【v1.2 新增】** 一键创建 3840x3840 无截断 3D Saber 能量符号/传送门（含眼泪内世界自动 3D 子级缩放重置补偿） |
+| `inspectFrameAestheticsAndClipping` | **【v1.2 新增】** 运行内置 **FastSal-NIMA-Lite (fastsal_nima_lite.onnx)** 模型检测渲染帧的 3D 发光矩形边缘截断、字幕遮挡与美学评分 (1-10分) |
+| `fixLayerGlowAndBoundsClipping` | **【v1.2 新增】** 自动遍历合成修复发光边界截断，智能在前级挂载 ADBE Grow Bounds 并将小尺寸 Saber 纯色图层扩展重置 |
 | `cleanBridgeBackups` | **【v1.1 新增】** 自动扫描并清理 AE 主菜单与 `ScriptUI Panels` 中的残留备份文件，防止主菜单堆积 |
 | `rollback` | 撤销上一步操作并安全恢复工程 |
 

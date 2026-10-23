@@ -3,6 +3,7 @@ import path from 'path';
 import { ConfigManager } from '../config/index.js';
 import { analyzeAudioRhythm } from '../audio/beat-analyzer.js';
 import { alignLyricsWithMMS } from '../audio/mms-aligner.js';
+import { analyzeMusicEmotionWithMusiCNN } from '../audio/musicnn-analyzer.js';
 import { evaluateVideoWithDOVER } from '../video/dover-scorer.js';
 const DEFAULT_AI_CONFIG = {
     apiKey: '',
@@ -124,7 +125,12 @@ Instructions:
 1. Write robust, executable ExtendScript JavaScript code to modify the target layer.
 2. Assume the variable 'layer' represents the target layer, and 'comp' represents the active composition.
 3. You can set transform properties (position, scale, rotation, opacity, 3D), add keyframes with velocity curves, set expressions, add effects (ADBE Effect Parade), configure effect parameters, add masks, etc.
-4. Output your response in two parts:
+4. Critical ExtendScript engineering rules:
+   - Always add "ADBE Grow Bounds" (250-300px) BEFORE "ADBE Glow2" (never use the invalid matchName "ADBE Glo2") on 3D shape/text layers so glow never clips at layer bounds.
+   - For 3D Video Copilot Saber ("VIDEOCOPILOT LightSaber") solids, use a large 3840x3840 solid so wide glow never clips against solid edges.
+   - When merging articulated shape groups, set "ADBE Vector Filter - Merge" -> "ADBE Vector Merge Type" to 2 (Add / Boolean Union), not 1 (Compound Path), and lock upper-body joints trigonometrically to the Torso waist rotation so limbs never separate.
+   - After setting childLayer.parent = parentLayer, always reset childLayer.property("Scale").setValue([100, 100, 100]) if the parent is scaled.
+5. Output your response in two parts:
 - First, a concise explanation in natural language describing what modifications were made.
 - Second, the exact ExtendScript JavaScript code enclosed in a \`\`\`javascript ... \`\`\` code fence.`;
         const userContent = [];
@@ -371,6 +377,38 @@ Instructions:
                             ? ` | 音画卡点同步分: ${scoreRes.scores.audioVisualSyncScore}/100`
                             : '') +
                         `\n建议: ${scoreRes.recommendations.join(' ')}`;
+            }
+            else if (req.type === 'analyze_music_musicnn') {
+                if (!req.audioPath)
+                    throw new Error('Audio path is required.');
+                const emoRes = await analyzeMusicEmotionWithMusiCNN(req.audioPath, {
+                    lrcFilePath: req.lrcPath || undefined,
+                    lyricsText: req.prompt || undefined,
+                });
+                const tpMarkers = emoRes.emotionalTurningPoints.map((tp) => ({
+                    time: tp.time,
+                    comment: `MUSICNN [${tp.type.toUpperCase()}] ${tp.description}`,
+                    label: 10,
+                }));
+                const markerScript = `
+          var items = ${JSON.stringify(tpMarkers)};
+          for (var i = 0; i < items.length; i++) {
+            var mv = new MarkerValue(items[i].comment);
+            try { mv.label = items[i].label; } catch(e){}
+            comp.markerProperty.setValueAtTime(items[i].time, mv);
+          }
+        `;
+                const topMoodStr = emoRes.summary.topMoodTags
+                    .slice(0, 5)
+                    .map((t) => `${t.zh}(${t.score})`)
+                    .join(', ');
+                response.success = true;
+                response.script = markerScript;
+                response.data = emoRes;
+                response.explanation =
+                    `[MusiCNN 情绪标签与张力分析] 主导情绪: ${emoRes.summary.dominantMoodZh} (${emoRes.summary.emotionalQuadrant}) ` +
+                        `(Valence=${emoRes.summary.averageValence}, Arousal=${emoRes.summary.averageArousal}, Tension=${emoRes.summary.averageTension}) | ` +
+                        `Top情绪标签: ${topMoodStr} | 情绪转折点: ${emoRes.emotionalTurningPoints.length} 处 (已写入合成标记并生成双人动作姿态序列)`;
             }
         }
         catch (err) {

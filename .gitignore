@@ -7,3 +7,8 @@ Thumbs.db
 test/
 *.zip
 bin/ffmpeg.exe
+*.aep
+*_AME/
+*.aep_AME/
+*.mp4
+*.raw

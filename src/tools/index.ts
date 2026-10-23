@@ -10,7 +10,9 @@ import { installBridgeScript, cleanScriptUIPanelBackups } from '../scripts/insta
 import * as snippets from '../extendscript/snippets.js';
 import { analyzeAudioRhythm } from '../audio/beat-analyzer.js';
 import { alignLyricsWithMMS } from '../audio/mms-aligner.js';
+import { analyzeMusicEmotionWithMusiCNN } from '../audio/musicnn-analyzer.js';
 import { evaluateVideoWithDOVER } from '../video/dover-scorer.js';
+import { inspectFrameWithFastSalNIMA } from '../video/frame-inspector.js';
 
 export function registerAllTools(server: McpServer): void {
   const bridge = BridgeManager.getInstance();
@@ -1715,12 +1717,18 @@ Use getInstalledPlugins to discover installed effects or test compatibility.`,
             opacProp.setValueAtTime(tOut, 0);
           }
 
-          var glow = lyr.property("ADBE Effect Parade").addProperty("ADBE Glo2");
+          var fxParade = lyr.property("ADBE Effect Parade");
+          try {
+            var gb = fxParade.addProperty("ADBE Grow Bounds");
+            if (gb) gb.property("ADBE Grow Bounds-0001").setValue(250);
+          } catch(gbe){}
+          var glow = fxParade.addProperty("ADBE Glow2");
           if (glow) {
             try {
-              glow.property(2).setValue(45);
-              glow.property(3).setValue(75);
-              glow.property(4).setValue(1.8);
+              glow.property("ADBE Glow2-0001").setValue(2);
+              glow.property("ADBE Glow2-0002").setValue(45);
+              glow.property("ADBE Glow2-0003").setValue(75);
+              glow.property("ADBE Glow2-0004").setValue(1.8);
             } catch(ge){}
           }
           created++;
@@ -1766,6 +1774,149 @@ Use getInstalledPlugins to discover installed effects or test compatibility.`,
         endTime: params.endTime,
       });
       return formatResponse(result);
+    }
+  );
+
+  // --- 54. analyzeMusicEmotionWithMusiCNN ---
+  server.tool(
+    'analyzeMusicEmotionWithMusiCNN',
+    'Analyze an audio file using the bundled MusiCNN (musicnn_mood_va.onnx, Pons & Serra 2019 multi-scale timbral+temporal CNN) + AudioLyricPoseNet (audio_lyric_pose_net.onnx). Returns 50 music emotion/instrument/vocal/structure tags, continuous Russell Circumplex Valence-Arousal-Tension trajectories, emotional turning points, and per-window 3D camera + Boy/Girl 7-joint character acting choreography.',
+    {
+      audioPath: z.string().describe('Absolute path to the audio file (.mp3, .wav, .flac, .m4a)'),
+      startTime: z.number().optional().describe('Start time in seconds (default: 0)'),
+      endTime: z.number().optional().describe('End time in seconds'),
+      windowSec: z.number().optional().describe('Window duration in seconds for emotion curve if no LRC is provided (default: 3.5)'),
+      lrcFilePath: z.string().optional().describe('Optional path to .lrc file so each lyric line receives its own MusiCNN emotion & AudioLyricPoseNet acting direction'),
+      lyricsText: z.string().optional().describe('Optional raw LRC or plain lyrics text to fuse lyric affect with MusiCNN audio features for character pose generation'),
+      topK: z.number().optional().describe('Number of top mood/music tags to return per segment (default: 6)'),
+    },
+    async (params) => {
+      const result = await analyzeMusicEmotionWithMusiCNN(params.audioPath, {
+        startTime: params.startTime,
+        endTime: params.endTime,
+        windowSec: params.windowSec,
+        lrcFilePath: params.lrcFilePath,
+        lyricsText: params.lyricsText,
+        topK: params.topK,
+      });
+      return formatResponse(result);
+    }
+  );
+
+  // --- 55. createArticulatedCharacterRig ---
+  server.tool(
+    'createArticulatedCharacterRig',
+    'Create a 3D 7-joint articulated character silhouette rig (distinct masculine Boy with short hair, broad shoulders, blazer & tie; or feminine Girl with flowing hair ribbon & pleated skirt) with trigonometrically locked spine (zero body separation when leaning), Merge Paths Type 2 (Boolean Union), unclipped glow (Grow Bounds + Glow2), and emotional pose presets.',
+    {
+      compName: z.string().optional().describe('Composition name (defaults to active composition)'),
+      name: z.string().optional().describe('Layer name'),
+      gender: z.enum(['boy', 'girl']).describe('Character silhouette anatomy: "boy" (short hair, broad shoulders, straight trousers, front tie) or "girl" (flowing hair ribbon, pleated skirt)'),
+      facing: z.enum(['left', 'right']).optional().describe('Direction the profile faces (default: right for boy, left for girl)'),
+      inPoint: z.number().optional().describe('In point in seconds'),
+      outPoint: z.number().optional().describe('Out point in seconds'),
+      position: z.tuple([z.number(), z.number(), z.number()]).optional().describe('3D position [x, y, z]'),
+      scale: z.number().optional().describe('Character size multiplier (default: 1.0)'),
+      fillColor: z.tuple([z.number(), z.number(), z.number()]).optional().describe('RGB fill color [0-1, 0-1, 0-1]'),
+      rimColor: z.tuple([z.number(), z.number(), z.number()]).optional().describe('RGB rim stroke color [0-1, 0-1, 0-1]'),
+      heartColor: z.tuple([z.number(), z.number(), z.number()]).optional().describe('RGB glowing heart-ember color [0-1, 0-1, 0-1]'),
+      posePreset: z.enum([
+        'reach_gently',
+        'embrace_close',
+        'walk_with_camera',
+        'recoil_grief',
+        'desperate_catch',
+        'kneel_weeping',
+        'turn_away_cold',
+        'custom',
+      ]).optional().describe('Emotional acting preset (default: reach_gently)'),
+      poseKeyframes: z.array(
+        z.object({
+          time: z.number(),
+          torsoLeanDeg: z.number().optional(),
+          headTiltDeg: z.number().optional(),
+          frontArmDeg: z.number().optional(),
+          backArmDeg: z.number().optional(),
+          frontLegDeg: z.number().optional(),
+          backLegDeg: z.number().optional(),
+          hairOrTieSwayDeg: z.number().optional(),
+        })
+      ).optional().describe('Optional custom pose keyframes generated by AudioLyricPoseNet'),
+    },
+    async (params) => {
+      const script = snippets.scriptCreateArticulatedCharacterRig(params);
+      const res = await bridge.execute(
+        'createArticulatedCharacterRig',
+        script,
+        `Create ${params.gender} articulated character rig '${params.name || params.gender}'`,
+        params
+      );
+      return formatResponse(res);
+    }
+  );
+
+  // --- 56. create3DSaberSymbolOrPortal ---
+  server.tool(
+    'create3DSaberSymbolOrPortal',
+    'Create an unclipped 3840x3840 3D Video Copilot Saber energy symbol or portal (heart, infinity, teardrop_portal with optional parented inner world & automatic 3D child scale-reset, clock_ring, or fracture_wall).',
+    {
+      compName: z.string().optional().describe('Composition name (defaults to active composition)'),
+      name: z.string().optional().describe('Layer name'),
+      symbolType: z.enum(['heart', 'infinity', 'teardrop_portal', 'clock_ring', 'fracture_wall']).describe('3D Saber mask geometry preset'),
+      inPoint: z.number().optional().describe('In point in seconds'),
+      outPoint: z.number().optional().describe('Out point in seconds'),
+      position: z.tuple([z.number(), z.number(), z.number()]).optional().describe('3D start position [x, y, z]'),
+      endPosition: z.tuple([z.number(), z.number(), z.number()]).optional().describe('Optional 3D end position [x, y, z] (e.g., for falling teardrop)'),
+      color: z.tuple([z.number(), z.number(), z.number()]).optional().describe('Saber RGB glow color [0-1, 0-1, 0-1]'),
+      coreSize: z.number().optional().describe('Saber core size (default: 4.2)'),
+      glowSpread: z.number().optional().describe('Saber glow spread (default: 0.40)'),
+      glowIntensity: z.number().optional().describe('Saber glow intensity (default: 48)'),
+      createInnerWorldForTeardrop: z.boolean().optional().describe('When symbolType is teardrop_portal, automatically create a parented inner infinity world with [100,100,100] scale-compensation fix'),
+    },
+    async (params) => {
+      const script = snippets.scriptCreate3DSaberSymbolOrPortal(params);
+      const res = await bridge.execute(
+        'create3DSaberSymbolOrPortal',
+        script,
+        `Create 3D Saber symbol '${params.symbolType}'`,
+        params
+      );
+      return formatResponse(res);
+    }
+  );
+
+  // --- 57. inspectFrameAestheticsAndClipping ---
+  server.tool(
+    'inspectFrameAestheticsAndClipping',
+    'Inspect a rendered After Effects frame (.png, .jpg) using the bundled FastSal-NIMA-Lite (fastsal_nima_lite.onnx) visual saliency & aesthetic neural model plus geometric luminance-cliff boundary detector. Detects 3D glow/Saber rectangular clipping, subtitle-subject occlusion, spatial saliency center, and NIMA aesthetic score (1-10).',
+    {
+      imagePath: z.string().describe('Absolute path to the rendered frame image (.png or .jpg)'),
+    },
+    async (params) => {
+      const result = await inspectFrameWithFastSalNIMA(params.imagePath);
+      return formatResponse(result);
+    }
+  );
+
+  // --- 58. fixLayerGlowAndBoundsClipping ---
+  server.tool(
+    'fixLayerGlowAndBoundsClipping',
+    'Automatically repair 3D glow and Saber rectangular boundary clipping across a layer or an entire composition by inserting ADBE Grow Bounds before ADBE Glow2 and expanding small 3D Saber solids to 3840x3840 while recentering their masks.',
+    {
+      compName: z.string().optional().describe('Composition name (defaults to active composition)'),
+      layerName: z.string().optional().describe('Optional layer name (if omitted, repairs all layers in the composition)'),
+      layerIndex: z.number().optional().describe('Optional 1-based layer index'),
+      growPixels: z.number().optional().describe('Grow Bounds pixel radius (default: 280)'),
+      expandSaberSolidsToSize: z.number().optional().describe('Minimum width/height for 3D Saber solids (default: 3840)'),
+    },
+    async (params) => {
+      const script = snippets.scriptFixLayerGlowAndBoundsClipping(params);
+      const res = await bridge.execute(
+        'fixLayerGlowAndBoundsClipping',
+        script,
+        'Fix 3D layer glow and Saber bounds clipping',
+        params
+      );
+      return formatResponse(res);
     }
   );
 }
